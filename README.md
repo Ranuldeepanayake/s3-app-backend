@@ -24,6 +24,26 @@ A simple Node.js + Express CRUD API for uploading, viewing, updating, and deleti
    npm run dev
    ```
 
+## Docker Setup
+Build the image:
+```bash
+docker build -t s3-app-backend .
+```
+
+Run the container:
+```bash
+docker run -p 3000:3000 \
+  --env-file .env \
+  s3-app-backend
+```
+
+## Logging
+The server logs:
+- every incoming request method and path
+- database connection status
+- upload/update/delete errors
+- startup failures
+
 ## API Endpoints
 - `POST /api/images` — upload an image (`multipart/form-data` with field `image`)
 - `GET /api/images` — list all images

@@ -4,12 +4,24 @@ const connectDB = require('./config/db');
 const imageRoutes = require('./routes/imageRoutes');
 
 dotenv.config();
-connectDB();
 
 const app = express();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  next();
+});
+
+app.use((err, req, res, next) => {
+  console.error(`[${new Date().toISOString()}] Error on ${req.method} ${req.originalUrl}:`, err.message);
+  res.status(err.status || 500).json({
+    message: 'Internal server error',
+    error: err.message
+  });
+});
 
 app.get('/', (req, res) => {
   res.json({
@@ -27,6 +39,17 @@ app.get('/', (req, res) => {
 app.use('/api/images', imageRoutes);
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+
+const startServer = async () => {
+  try {
+    await connectDB();
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error.message);
+    process.exit(1);
+  }
+};
+
+startServer();
