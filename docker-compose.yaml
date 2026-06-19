@@ -1,18 +1,19 @@
 ---
 services:
   s3-app-backend:
-    image:
-      build:
-        context: .
-        dockerfile: Dockerfile
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: s3-app-backend
     restart: unless-stopped
     networks:
       - s3-app
     ports:
       - "3100:3100"
-    environment:
-      TEST_ENV: "AWS"
+    # environment:
+    #   TEST_ENV: "AWS"
+    env_file:
+      - .env
 
 networks:
   s3-app:

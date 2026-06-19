@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const imageRoutes = require('./routes/imageRoutes');
@@ -15,14 +16,6 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use((err, req, res, next) => {
-  console.error(`[${new Date().toISOString()}] Error on ${req.method} ${req.originalUrl}:`, err.message);
-  res.status(err.status || 500).json({
-    message: 'Internal server error',
-    error: err.message
-  });
-});
-
 app.get('/', (req, res) => {
   res.json({
     message: 'S3 image CRUD API is running',
@@ -36,7 +29,18 @@ app.get('/', (req, res) => {
   });
 });
 
-app.use('/api/images', imageRoutes);
+app.use(
+  '/api/images',
+  (req, res, next) => {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        message: 'Database is unavailable right now. Please try again later.'
+      });
+    }
+    next();
+  },
+  imageRoutes
+);
 
 const PORT = process.env.PORT || 3000;
 
@@ -48,8 +52,15 @@ const startServer = async () => {
     });
   } catch (error) {
     console.error('Failed to start server:', error.message);
-    process.exit(1);
   }
 };
 
 startServer();
+
+app.use((err, req, res, next) => {
+  console.error(`[${new Date().toISOString()}] Error on ${req.method} ${req.originalUrl}:`, err.message);
+  res.status(err.status || 500).json({
+    message: 'Internal server error',
+    error: err.message
+  });
+});
