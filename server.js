@@ -2,14 +2,21 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
+const multer = require('multer');
 const connectDB = require('./config/db');
 const imageRoutes = require('./routes/imageRoutes');
+const { router: authRouter } = require('./routes/authRoutes');
 const { testS3Connection } = require('./config/s3');
 const logger = require('./config/logger');
 
 dotenv.config();
 
 const app = express();
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+const PORT = Number(process.env.PORT || process.env.API_PORT || 3100);
+const HOST = process.env.HOST || '0.0.0.0';
 
 // Allow browser-based requests from the React frontend during local development.
 app.use((req, res, next) => {
@@ -23,9 +30,6 @@ app.use((req, res, next) => {
 
   next();
 });
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
 // Log each incoming HTTP request with a timestamp and request method.
 app.use((req, res, next) => {
@@ -46,6 +50,8 @@ app.get('/', (req, res) => {
   });
 });
 
+app.use('/api/auth', authRouter);
+
 // Protect image routes so they only run when MongoDB is available.
 app.use(
   '/api/images',
@@ -60,9 +66,6 @@ app.use(
   },
   imageRoutes
 );
-
-const PORT = Number(process.env.PORT || process.env.API_PORT || 3100);
-const HOST = process.env.HOST || '0.0.0.0';
 
 // Start the server, connect to MongoDB, and verify S3 availability.
 const startServer = async () => {
@@ -94,6 +97,17 @@ startServer();
 
 // Centralized error handler for unexpected failures.
 app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      const maxSize = Number(process.env.MAX_IMAGE_SIZE_BYTES || 5 * 1024 * 1024);
+      return res.status(413).json({
+        message: `Image exceeds the maximum allowed size of ${Math.ceil(maxSize / 1024 / 1024)}MB.`
+      });
+    }
+
+    return res.status(400).json({ message: err.message });
+  }
+
   logger.error('HTTP', `Error on ${req.method} ${req.originalUrl}`, err.message);
   res.status(err.status || 500).json({
     message: 'Internal server error',

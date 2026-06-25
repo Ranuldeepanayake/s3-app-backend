@@ -10,8 +10,8 @@ services:
       - s3-app
     ports:
       - "3100:3100"
-    # environment:
-    #   TEST_ENV: "AWS"
+    environment:
+      #- MAX_IMAGE_SIZE_BYTES=5242880
     env_file:
       - .env
 

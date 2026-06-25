@@ -1,3 +1,5 @@
+//Database model for storing image metadata in MongoDB using Mongoose.
+
 const mongoose = require('mongoose');
 
 const imageSchema = new mongoose.Schema(

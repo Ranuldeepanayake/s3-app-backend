@@ -1,4 +1,5 @@
 // Route handlers for image upload, retrieval, update, and deletion.
+
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
@@ -10,12 +11,17 @@ const { v4: uuidv4 } = require('uuid');
 const { s3Client } = require('../config/s3');
 const Image = require('../models/Image');
 const logger = require('../config/logger');
+const { authenticateToken } = require('./authRoutes');
 
 const router = express.Router();
+
+const bucketName = process.env.AWS_BUCKET_NAME;
+const urlExpiration = Number(process.env.AWS_URL_EXPIRATION || 3600);
 
 // Store uploaded files in a temporary directory rather than memory.
 const uploadDir = path.join(__dirname, '..', 'tmp');
 
+// Ensure the temporary upload directory exists, creating it if necessary.
 if (!fs.existsSync(uploadDir)) {
   logger.info('ROUTES', `Creating upload temp directory at ${uploadDir}`);
   fs.mkdirSync(uploadDir, { recursive: true });
@@ -23,14 +29,18 @@ if (!fs.existsSync(uploadDir)) {
   logger.info('ROUTES', `Using existing upload temp directory at ${uploadDir}`);
 }
 
+// Multer storage configuration for handling image uploads.
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => cb(null, `${Date.now()}-${uuidv4()}-${file.originalname}`)
 });
 
+const maxFileSize = Number(process.env.MAX_IMAGE_SIZE_BYTES || 5 * 1024 * 1024);
+
+// Multer configuration for handling image uploads with size limits and file type filtering.
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: maxFileSize },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) {
       cb(null, true);
@@ -39,9 +49,6 @@ const upload = multer({
     }
   }
 });
-
-const bucketName = process.env.AWS_BUCKET_NAME;
-const urlExpiration = Number(process.env.AWS_URL_EXPIRATION || 3600);
 
 // Generate a signed URL for an object in S3.
 const createSignedUrl = async (key) => {
@@ -53,12 +60,14 @@ const createSignedUrl = async (key) => {
   return getSignedUrl(s3Client, command, { expiresIn: urlExpiration });
 };
 
+// Serialize an image document to include a signed URL for access.
 const serializeImage = async (imageDoc) => {
   const image = imageDoc.toObject();
   image.url = await createSignedUrl(image.key);
   return image;
 };
 
+// Find an image by either its MongoDB _id or its custom imageId.
 const findImageByIdentifier = async (identifier) => {
   if (!identifier) {
     return null;
@@ -207,6 +216,36 @@ router.put('/:id', upload.single('image'), async (req, res) => {
   } catch (error) {
     logger.error('ROUTES', 'Update image error', error.message);
     res.status(500).json({ message: 'Failed to update image.', error: error.message });
+  }
+});
+
+// Delete all images from S3 and the database. Requires a valid JWT.
+router.delete('/delete-all', authenticateToken, async (req, res) => {
+  try {
+    const images = await Image.find();
+
+    await Promise.all(images.map(async (image) => {
+      try {
+        await s3Client.send(
+          new DeleteObjectCommand({
+            Bucket: image.bucket,
+            Key: image.key
+          })
+        );
+      } catch (error) {
+        logger.warn('ROUTES', `Skipping S3 delete for ${image.key}`, error.message);
+      }
+    }));
+
+    await Image.deleteMany({});
+
+    res.json({
+      message: 'All images deleted successfully.',
+      deletedCount: images.length
+    });
+  } catch (error) {
+    logger.error('ROUTES', 'Delete all images error', error.message);
+    res.status(500).json({ message: 'Failed to delete all images.', error: error.message });
   }
 });
 

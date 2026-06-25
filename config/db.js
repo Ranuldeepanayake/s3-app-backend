@@ -1,7 +1,9 @@
 // MongoDB connection helper for the application.
+
 const mongoose = require('mongoose');
 const logger = require('./logger');
 
+// Connect to MongoDB with retry logic on failure.
 const connectDB = async () => {
   if (mongoose.connection.readyState === 1 || mongoose.connection.readyState === 2) {
     return;
@@ -22,6 +24,7 @@ const connectDB = async () => {
   }
 };
 
+// Handle MongoDB disconnection and errors.
 mongoose.connection.on('disconnected', () => {
   logger.warn('MONGO', 'MongoDB disconnected. Retrying connection...');
   setTimeout(() => {
@@ -29,6 +32,7 @@ mongoose.connection.on('disconnected', () => {
   }, 5000);
 });
 
+// Handle MongoDB runtime errors.
 mongoose.connection.on('error', (error) => {
   logger.error('MONGO', 'MongoDB runtime error', error.message);
 });

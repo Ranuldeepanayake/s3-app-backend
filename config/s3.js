@@ -1,4 +1,5 @@
 // AWS S3 client setup and connection health check helper.
+
 const { S3Client, HeadBucketCommand } = require('@aws-sdk/client-s3');
 const logger = require('./logger');
 
@@ -10,6 +11,7 @@ const s3Client = new S3Client({
   }
 });
 
+// Test S3 connection by checking if the specified bucket exists and is accessible.
 const testS3Connection = async ({ retries = 3, delayMs = 2000 } = {}) => {
   const bucketName = process.env.AWS_BUCKET_NAME;
 

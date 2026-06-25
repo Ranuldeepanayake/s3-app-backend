@@ -1,3 +1,5 @@
+//Logger function to log messages with timestamp and component context.
+
 const formatTimestamp = () => new Date().toISOString();
 
 const logWithContext = (level, component, message, meta) => {
