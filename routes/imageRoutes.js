@@ -60,9 +60,17 @@ const serializeImage = async (imageDoc) => {
 };
 
 const findImageByIdentifier = async (identifier) => {
-  return Image.findOne({
-    $or: [{ _id: identifier }, { imageId: identifier }]
-  });
+  if (!identifier) {
+    return null;
+  }
+
+  const isObjectIdLike = /^[a-fA-F0-9]{24}$/.test(identifier);
+
+  if (isObjectIdLike) {
+    return Image.findOne({ _id: identifier });
+  }
+
+  return Image.findOne({ imageId: identifier });
 };
 
 // Upload a new image to S3 and store metadata in MongoDB.
