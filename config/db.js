@@ -1,4 +1,6 @@
+// MongoDB connection helper for the application.
 const mongoose = require('mongoose');
+const logger = require('./logger');
 
 const connectDB = async () => {
   if (mongoose.connection.readyState === 1 || mongoose.connection.readyState === 2) {
@@ -10,10 +12,10 @@ const connectDB = async () => {
       serverSelectionTimeoutMS: 5000,
       autoIndex: true
     });
-    console.log('MongoDB connected');
+    logger.info('MONGO', 'MongoDB connected');
   } catch (error) {
-    console.error('MongoDB connection error:', error.message);
-    console.log('Retrying MongoDB connection in 5 seconds...');
+    logger.error('MONGO', 'MongoDB connection error', error.message);
+    logger.info('MONGO', 'Retrying MongoDB connection in 5 seconds...');
     setTimeout(() => {
       connectDB();
     }, 5000);
@@ -21,14 +23,14 @@ const connectDB = async () => {
 };
 
 mongoose.connection.on('disconnected', () => {
-  console.warn('MongoDB disconnected. Retrying connection...');
+  logger.warn('MONGO', 'MongoDB disconnected. Retrying connection...');
   setTimeout(() => {
     connectDB();
   }, 5000);
 });
 
 mongoose.connection.on('error', (error) => {
-  console.error('MongoDB runtime error:', error.message);
+  logger.error('MONGO', 'MongoDB runtime error', error.message);
 });
 
 module.exports = connectDB;
