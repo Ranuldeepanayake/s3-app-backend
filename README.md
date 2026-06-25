@@ -27,7 +27,7 @@ cp .env.example .env
 Required values in `.env`:
 
 ```env
-PORT=3000
+PORT=3100
 MONGODB_URI=mongodb://mongo:27017/s3-app
 AWS_REGION=ap-southeast-1
 AWS_ACCESS_KEY_ID=your-access-key
@@ -54,6 +54,17 @@ The app will:
 - test S3 access for the configured bucket
 - start the API on port 3000
 
+## Frontend Setup
+A simple React frontend is available in the sibling directory [s3-app-frontend](../s3-app-frontend). To run it locally:
+
+```bash
+cd ../s3-app-frontend
+npm install
+npm run dev
+```
+
+The frontend expects the backend at `http://localhost:3300` and uses the existing image API endpoints for listing, viewing, uploading, updating, and deleting images.
+
 ## Docker Setup
 Build the image:
 
@@ -64,7 +75,7 @@ docker build -t s3-app-backend .
 Run the container with your environment file:
 
 ```bash
-docker run -p 3000:3000 --env-file .env s3-app-backend
+docker run -p 3100:3100 --env-file .env s3-app-backend
 ```
 
 You can also use Docker Compose:

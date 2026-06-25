@@ -11,6 +11,19 @@ dotenv.config();
 
 const app = express();
 
+// Allow browser-based requests from the React frontend during local development.
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+
+  next();
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -48,11 +61,20 @@ app.use(
   imageRoutes
 );
 
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT || process.env.API_PORT || 3100);
+const HOST = process.env.HOST || '0.0.0.0';
 
 // Start the server, connect to MongoDB, and verify S3 availability.
 const startServer = async () => {
   try {
+    logger.info('STARTUP', 'Resolved startup configuration', {
+      port: PORT,
+      host: HOST,
+      mongodbUriConfigured: Boolean(process.env.MONGODB_URI),
+      awsBucketConfigured: Boolean(process.env.AWS_BUCKET_NAME),
+      awsRegion: process.env.AWS_REGION || 'not-set'
+    });
+
     await connectDB();
 
     const s3Ready = await testS3Connection();
@@ -60,8 +82,8 @@ const startServer = async () => {
       logger.warn('STARTUP', 'S3 connection unavailable, but continuing startup.');
     }
 
-    app.listen(PORT, () => {
-      logger.info('STARTUP', `Server running on port ${PORT}`);
+    app.listen(PORT, HOST, () => {
+      logger.info('STARTUP', `Server running on http://${HOST}:${PORT}`);
     });
   } catch (error) {
     logger.error('STARTUP', 'Failed to start server', error.message);
