@@ -187,11 +187,12 @@ jobs:
       run: |
         docker push ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG}
 
-    #Deployment. The .env file must be copied to the deployment repository regardless whether the file is deployed or not.
+    #Deployment. The .env file must be copied to the deployment repository regardless whether the file is deployed or not. But why though??
+    #It is better not to copy since a change would trigger a deployment even if the image tag is not changed. So, only copy the .env file if the deploy option is selected.
 
     #Checkout the gitops repository.
     - name: Checkout code
-      #if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
+      if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       uses: actions/checkout@v4
       with:
           repository: ${{ env.DEPLOYMENT_REPOSITORY }}
@@ -204,7 +205,7 @@ jobs:
 
       #Copy environment variables to the deployment repository.
     - name: Copy the .env file
-      #if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
+      if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       run: |
         cp .env/.env-dev deployment-repo/${DEV_ENVIRONMENT_ENV_FILE}
         cd deployment-repo
@@ -234,7 +235,7 @@ jobs:
 
     #Commit and push the change to the deployment repository.
     - name: Commit and push
-      #if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
+      if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       run: |
         cd deployment-repo
 
