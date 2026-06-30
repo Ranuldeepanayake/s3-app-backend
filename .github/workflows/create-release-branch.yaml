@@ -1,0 +1,322 @@
+#Create a new release branch from the develop branch and increment the version number of the develop branch.
+
+name: Create release branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      #Input to select the action.
+      INPUT_ACTION:
+        description: 'Select action'
+        required: true
+        default: build-and-deploy
+        # GitHub doesn't have native radio buttons; use allowed values
+        type: choice
+        options:
+          - build
+          - build-and-deploy
+
+      #Input to select the version number segment to bump.
+      INPUT_BUMP_SEGMENT:
+        description: 'Select version segment to bump'
+        required: true
+        default: minor
+        type: choice
+        options:
+          - minor
+          - major
+
+#Global environment variables.
+env:
+  INPUT_ACTION: ${{ github.event.inputs.INPUT_ACTION }}
+  INPUT_BUMP_SEGMENT: ${{ github.event.inputs.INPUT_BUMP_SEGMENT }}
+  VERSION_FILE: package.json
+  PARENT_BRANCH: develop
+  RC_TAG: 0 
+  AWS_REGION: us-east-1
+  AWS_USERNAME: AWS
+  ECR_REPOSITORY_URL: public.ecr.aws/l4a5c1v5
+  ECR_REPOSITORY_GROUP: qba
+  ECR_REPOSITORY_NAME: qba-back-end
+  COMMIT_USERNAME: github-actions
+  COMMIT_EMAIL: github-actions@github.com
+  QA_ENVIRONMENT_VALUES_FILE: environments/qa/values.yaml
+  QA_ENVIRONMENT_ENV_FILE: environments/qa/qba-back-end-env.yaml
+  DEPLOYMENT_REPOSITORY: Ranuldeepanayake/qba-helm
+
+#Permissions.
+permissions:
+  contents: write
+
+#A job has a sequential list of steps. Several jobs can be run in parallel or chained.
+jobs:
+  create-release-branch:
+
+    #Runner label.
+    runs-on: self-hosted
+
+    steps:
+        #Checkout the parent branch specifically since we are creating the new one from it.
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PARENT_BRANCH }}
+          #Cleans the workspace before checking out code.
+          clean: true
+          #Fetches full history for tags to work.
+          fetch-depth: 0
+
+        #Check if the version number is in the correct format.
+      - name: Validate version number
+        run: |
+          echo "Version file: ${VERSION_FILE}"
+
+          #Read the version file.
+          VERSION_NUMBER=$(jq -r '.version' ${VERSION_FILE} | tr -d '\n')
+          
+          #Append the version number variable to the array of runtime variables.
+          echo "VERSION_NUMBER=$VERSION_NUMBER" >> $GITHUB_ENV
+          echo "Version number: ${VERSION_NUMBER}"
+          
+          #Allowed patterns.
+          PATTERN="([0-9]+\.[0-9]+\.[0]){1,1}"
+
+          if [[ ! ${VERSION_NUMBER} =~ $PATTERN ]]; then
+            echo "❌ Version number ${VERSION_NUMBER} is inconsistent with the format. Exiting!"
+            echo "Allowed formats: x.x.0"
+            exit 1
+          else
+            echo "✅ Version number ${VERSION_NUMBER} is consistent with the format"
+          fi
+
+##Pull the develop branch, create a release branch with the release candidate tag, append the release candidate tag to the version file,
+##create a git tag out of the new branch, push the release branch to remote, checkout back from develop, increment the version file, push back to remote, 
+##build the release branch, deploy the release branch.
+
+        #Prepare the new branch name with the necessary appends.
+      - name: Prepare release branch name
+        id: meta
+        run: | 
+          #Append the necessary components.
+          NEW_BRANCH_NAME="release/${VERSION_NUMBER}"
+          echo "NEW_BRANCH_NAME=$NEW_BRANCH_NAME" >> $GITHUB_ENV
+          echo "New branch name: ${NEW_BRANCH_NAME}"
+       
+        #Create the new branch from the parent branch.
+      - name: Create release branch
+        run: |
+          git checkout -b ${NEW_BRANCH_NAME}
+
+        #Append the release candidate tag to the version file of the new branch.
+      - name: Append release candidate tag
+        run: |
+          #BASE_VERSION=$(jq -r '.version' package.json | sed 's/-rc\..*//')
+          #RC_NUMBER=${{ github.run_number }}
+          #RC_VERSION="${BASE_VERSION}-rc.${RC_NUMBER}"
+          #jq ".version = \"${RC_VERSION}\"" package.json > tmp.json && mv tmp.json package.json
+
+          RC_VERSION="${VERSION_NUMBER}-rc.${RC_TAG}"
+          echo "RC_VERSION=$RC_VERSION" >> $GITHUB_ENV
+          echo "Prepared release candidate version: ${RC_VERSION}"
+
+          #Write the new version to the version file.
+          jq ".version = \"${RC_VERSION}\"" ${VERSION_FILE} > temp.json && mv temp.json ${VERSION_FILE}
+
+          #echo "Release candidate version in version file: $(jq -r '.version' ${VERSION_FILE} | tr -d '\n')
+          RC_VERSION_READ_BACK=$(jq -r '.version' ${VERSION_FILE} | tr -d '\n')
+          echo "Written release candidate version: $RC_VERSION_READ_BACK"
+
+          #Validate written changes.
+          if [[ ! $RC_VERSION_READ_BACK =~ $RC_VERSION ]]; then
+            echo "❌ Release candidate version not written correctly to the version file. Exiting!"
+            exit 1
+          else
+            echo "✅ Release candidate version written correctly to the version file"
+          fi
+
+        #Push the new branch to remote.
+      - name: Push release branch
+        run: |
+          git config user.name ${COMMIT_USERNAME} 
+          git config user.email ${COMMIT_EMAIL}
+
+          git add ${VERSION_FILE}
+
+          #Handle the nothing to commit issue.
+          # if git diff --cached --quiet; then
+          # echo "No changes to commit"
+          # else
+          #   git commit -m "Pipeline: set version to ${RC_VERSION}"
+          # fi
+
+          git commit --allow-empty -m "Pipeline (release branch creation): created a release branch ${NEW_BRANCH_NAME} with version ${RC_VERSION}"
+
+          #Create a git tag.
+          git tag -a ${RC_VERSION} -m "Release candidate tag ${RC_VERSION}"
+          echo "Tags: $(git tag -l)"
+
+          #Push the branch.
+          git push --set-upstream origin ${NEW_BRANCH_NAME}
+
+          #Push the tag.
+          git push origin ${RC_VERSION}
+
+      #Checkout the parent branch.
+      - name: Checkout develop branch
+        run: |
+          git checkout develop
+          git fetch
+          git pull
+          echo "Selected branch: $(git branch)"
+
+      #Read and increment the version number.
+      - name: Increment the version
+        run: |
+          #Read the version number.
+          VERSION_MAJOR=$(echo ${VERSION_NUMBER} | awk -F '.' '{print $1}' | tr -d '\n')
+          VERSION_MINOR=$(echo ${VERSION_NUMBER} | awk -F '.' '{print $2}' | tr -d '\n')
+          VERSION_PATCH=$(echo ${VERSION_NUMBER} | awk -F '.' '{print $3}' | tr -d '\n')
+
+          echo "Version major: $VERSION_MAJOR"
+          echo "Version minor: $VERSION_MINOR"
+          echo "Version patch: $VERSION_PATCH"
+
+          #Select which segment to increment.
+          if [[ ${INPUT_BUMP_SEGMENT} == 'major' ]]; then
+            INCREMENTED_VERSION="$((VERSION_MAJOR + 1)).$VERSION_MINOR.$VERSION_PATCH"
+            echo "INCREMENTED_VERSION=$INCREMENTED_VERSION" >> $GITHUB_ENV
+          elif [[ ${INPUT_BUMP_SEGMENT} == 'minor' ]]; then
+            INCREMENTED_VERSION="$VERSION_MAJOR.$((VERSION_MINOR + 1)).$VERSION_PATCH"
+            echo "INCREMENTED_VERSION=$INCREMENTED_VERSION" >> $GITHUB_ENV
+          fi
+
+          echo "Incremented version: ${INCREMENTED_VERSION}"
+          
+      #Update the version file with the new value.
+      - name: Update version file
+        run: |        
+          #jq ".version = \"${{ steps.bump.outputs.new }}\"" package.json > tmp.json
+          jq ".version = \"${INCREMENTED_VERSION}\"" ${VERSION_FILE} > temp.json && mv temp.json ${VERSION_FILE}
+
+          INCREMENTED_VERSION_READ_BACK=$(jq -r '.version' ${VERSION_FILE} | tr -d '\n')
+          echo "Written incremented version: $INCREMENTED_VERSION_READ_BACK"
+
+          #Validate written changes.
+          if [[ ! $INCREMENTED_VERSION_READ_BACK =~ ${INCREMENTED_VERSION} ]]; then
+            echo "❌ Incremented version not written correctly to the version file. Exiting!"
+            exit 1
+          else
+            echo "✅ Incremented version written correctly to the version file"
+          fi
+
+      #Commit and push the changes back to the develop branch.
+      - name: Commit and push
+        run: |
+          git config user.name ${COMMIT_USERNAME} 
+          git config user.email ${COMMIT_EMAIL}
+
+          git add ${VERSION_FILE}
+          git commit -m "Pipeline (develop version bump): bumped the version number to ${INCREMENTED_VERSION}" || echo "No changes to commit"
+
+          git push origin ${PARENT_BRANCH}
+
+      #Build.
+
+      #Prepare the image tag with the necessary appends.
+      - name: Prepare image tag
+        run: | 
+          #Append the time stamp variable to the array of runtime variables.
+          BUILD_TIMESTAMP=$(date +'%Y%m%d_%H%M%S')
+          echo "BUILD_TIMESTAMP=$BUILD_TIMESTAMP" >> $GITHUB_ENV
+          echo "Build timestamp: ${BUILD_TIMESTAMP}"
+
+          #Append the commit digest.
+          DIGEST_SHA=COMMITSHA_$(echo "${GITHUB_SHA}" | cut -c1-8)
+          echo "DIGEST_SHA=$DIGEST_SHA" >> $GITHUB_ENV
+          echo "Digest (SHA): ${DIGEST_SHA}"
+
+          #RC_VERSION is the full version number set at a previous stage.
+          IMAGE_TAG=${RC_VERSION}-RELEASE-SNAPSHOT-${BUILD_TIMESTAMP}-${DIGEST_SHA}
+
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          echo "Image tag: ${IMAGE_TAG}"
+
+        #Configure the artifact repository credentials.
+      - name: Configure artifact repository credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+        #Log in to the artifact repository.
+      - name: Login to the artifact repository
+        run: |
+          aws ecr-public get-login-password --region ${AWS_REGION} | docker login --username ${AWS_USERNAME} --password-stdin ${ECR_REPOSITORY_URL}
+
+        #Build the image.
+      - name: Build image
+        run: |
+          echo "Image name: ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG}"
+          docker build -t ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG} .
+
+        #Push the built image to an artifact repository.
+      - name: Push image to artifact repository
+        run: |
+          docker push ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG}
+
+
+      #Deployment. The .env file must be copied to the deployment repository regardless whether the file is deployed or not.
+
+      #Checkout the gitops repository.
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+            repository: ${{ env.DEPLOYMENT_REPOSITORY }}
+            token: ${{ secrets.DEPLOYMENT_REPOSITORY_TOKEN }}
+            path: deployment-repo
+            #Cleans the workspace before checking out code.
+            clean: true
+            fetch-depth: 0   #Required to push back
+
+        #Copy environment variables to the deployment repository.
+      - name: Copy the .env file
+        run: |
+          cp .env/.env-qa deployment-repo/${QA_ENVIRONMENT_ENV_FILE}
+          cd deployment-repo
+
+          #Verify the change.
+          if [[ -f "${QA_ENVIRONMENT_ENV_FILE}" ]]; then
+            echo "✅ .env file exists"
+          else
+            echo "❌ .env file does not exist!"
+            exit 1
+          fi
+
+      #Change the image tag. Only if the deploy option is selected.
+      - name: Change the image tag
+        if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
+        uses: mikefarah/yq@v4.44.1
+        with:
+          cmd: |
+            cd deployment-repo
+            yq -i '(.containers[] | select(.name == "back-end") | .tag) = env(IMAGE_TAG)' "${QA_ENVIRONMENT_VALUES_FILE}"
+
+            #Verify the change.
+            TAG_READ_BACK=$(yq '.containers[] | select(.name == "back-end") | .tag' "${QA_ENVIRONMENT_VALUES_FILE}")
+            echo "Tag read back: $TAG_READ_BACK"
+
+      #Commit and push the change to the deployment repository.
+      - name: Commit and push
+        #if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
+        run: |
+          cd deployment-repo
+
+          git config user.name ${COMMIT_USERNAME} 
+          git config user.email ${COMMIT_EMAIL}
+
+          git add ${QA_ENVIRONMENT_VALUES_FILE};
+          git add ${QA_ENVIRONMENT_ENV_FILE};
+          git commit -m "Pipeline (helm): replaced the image tag with ${IMAGE_TAG} and the .env file" || echo "No changes to commit"
+
+          git push
