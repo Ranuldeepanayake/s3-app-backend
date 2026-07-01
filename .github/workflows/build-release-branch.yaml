@@ -133,6 +133,12 @@ jobs:
         echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
         echo "Branch name: ${BRANCH_NAME}"
 
+        #Additional safegaurd to make sure only release branches are built. This is a double check since the version number is already checked to be in the correct format.
+        if [[ "${BRANCH_NAME}" != release/* ]]; then
+        echo "❌ invalid branch: ${BRANCH_NAME}"
+          exit 1          
+        fi
+
         IMAGE_TAG=${INCREMENTED_VERSION}-RELEASE-SNAPSHOT-${BUILD_TIMESTAMP}-${DIGEST_SHA}
 
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
@@ -216,16 +222,11 @@ jobs:
         git checkout --ours ${VERSION_FILE}
         git add ${VERSION_FILE}
 
-        #Works
-        #git merge -X theirs ${BRANCH_NAME}
-        #git checkout ${PARENT_BRANCH} -- ${VERSION_FILE}
-        #git add ${VERSION_FILE}
-
         git commit --allow-empty -m "Pipeline (merged develop with release): merged ${PARENT_BRANCH} with ${BRANCH_NAME} and incremeted the rc tag to ${INCREMENTED_VERSION}"
-
         git push origin ${PARENT_BRANCH}
 
-    #Deployment. The .env file must be copied to the deployment repository regardless whether the file is deployed or not.
+    #Deployment. The .env file must be copied to the deployment repository regardless whether the file is deployed or not. But why though??
+    #It is better not to copy since a change would trigger a deployment even if the image tag is not changed. So, only copy the .env file if the deploy option is selected.
 
     #Checkout the gitops repository.
     - name: Checkout code
@@ -241,6 +242,7 @@ jobs:
 
       #Checkout the release branch again to get the .env file.
     - name: Checkout release branch
+      if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       run: |
         git checkout ${BRANCH_NAME}
         echo "Selected branch: $(git branch)"

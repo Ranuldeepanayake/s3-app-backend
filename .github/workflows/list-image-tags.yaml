@@ -13,14 +13,15 @@ on:
           - DEVELOP
           - RELEASE
           - FEATURE
+          - BUGFIX
 
 #Global environment variables.
 env:
   INPUT_TAG_TYPE: ${{ github.event.inputs.INPUT_TAG_TYPE }}
-  AWS_REGION: us-east-1
-  ECR_REPOSITORY_URL: public.ecr.aws/l4a5c1v5
-  ECR_REPOSITORY_GROUP: qba
-  ECR_REPOSITORY_NAME: qba-back-end
+  AWS_REGION: ap-southeast-1
+  ECR_REPOSITORY_URL: 104322896078.dkr.ecr.ap-southeast-1.amazonaws.com
+  ECR_REPOSITORY_GROUP: s3-app
+  ECR_REPOSITORY_NAME: backend
 
 #Permissions.
 permissions:
@@ -29,7 +30,7 @@ permissions:
 jobs:
   list-ecr-tags:
     #Runner label.
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
       #Log in to the artifact repository.
@@ -40,29 +41,35 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      #Verify that the AWS CLI is configured correctly.
+      - name: Verify AWS CLI
+        run: |
+          aws --version
+          aws sts get-caller-identity
+
       #List image tags with the AWS CLI.
       - name: List image tags
         run: |
-          # aws ecr-public describe-images \
+          # aws ecr describe-images \
           #   --repository-name "${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}" \
           #   --query "imageDetails[?imageTags!=null].imageTags[] | [?contains(@, '${INPUT_TAG_TYPE}')] | sort(@) | reverse(@)" \
           #   --output table
 
-          aws ecr-public describe-images --repository-name "${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}" \
+          aws ecr describe-images --repository-name "${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}" \
           --query "imageDetails[?imageTags!=null].imageTags[]" --output text | \
           grep "$INPUT_TAG_TYPE" | \
 
-          # Extract version and timestamp
+          #Extract version and timestamp
           awk -F'-' '{
               version=$1;
               timestamp=$5;
               printf "%s %s %s\n", version, timestamp, $0
           }' | \
 
-          # Sort: version descending, then timestamp descending
+          #Sort: version descending, then timestamp descending
           sort -r -k1,1V -k2,2r | \
 
-          # Extract full tag
+          #Extract full tag
           awk '{print $3}'
 
 #Show all.
