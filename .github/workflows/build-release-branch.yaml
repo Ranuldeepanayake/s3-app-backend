@@ -44,7 +44,7 @@ permissions:
   pull-requests: write
 
 jobs:
-  build-feature-branch:
+  build-release-branch:
 
     #Runner label.
     runs-on: ubuntu-latest

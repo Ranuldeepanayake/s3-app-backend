@@ -28,7 +28,7 @@ permissions:
   contents: read
 
 jobs:
-  list-ecr-tags:
+  list-image-tags:
     #Runner label.
     runs-on: ubuntu-latest
 
