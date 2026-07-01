@@ -278,7 +278,7 @@ jobs:
           repository: ${{ env.DEPLOYMENT_REPOSITORY }}
           #token: ${{ secrets.DEPLOYMENT_REPOSITORY_TOKEN }}
           ssh-key: ${{ secrets.DEPLOYMENT_REPOSITORY_SSH_PRIVATE_KEY }}
-          path: path: ${{ env.DEPLOYMENT_REPOSITORY_PATH }}
+          path: ${{ env.DEPLOYMENT_REPOSITORY_PATH }}
           clean: true      #Cleans the workspace before checking out code.
           fetch-depth: 0   #Required to push back
 
