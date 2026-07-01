@@ -272,12 +272,12 @@ jobs:
         if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
         uses: actions/checkout@v4
         with:
-          repository: ${{ env.DEPLOYMENT_REPOSITORY }}
-          #token: ${{ secrets.DEPLOYMENT_REPOSITORY_TOKEN }}
-          ssh-key: ${{ secrets.DEPLOYMENT_REPOSITORY_SSH_PRIVATE_KEY }}
-          path: deployment-repo
-          clean: true      #Cleans the workspace before checking out code.
-          fetch-depth: 0   #Required to push back
+            repository: ${{ env.DEPLOYMENT_REPOSITORY }}
+            #token: ${{ secrets.DEPLOYMENT_REPOSITORY_TOKEN }}
+            ssh-key: ${{ secrets.DEPLOYMENT_REPOSITORY_SSH_PRIVATE_KEY }}
+            path: deployment-repo
+            clean: true      #Cleans the workspace before checking out code.
+            fetch-depth: 0   #Required to push back
 
         #Copy environment variables to the deployment repository.
       - name: Copy the .env file
