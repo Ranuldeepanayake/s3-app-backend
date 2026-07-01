@@ -1,0 +1,55 @@
+#Retag an image. Use this to tag an existing image with a new tag. This is useful for promoting an image to production without rebuilding it.
+
+name: List image tags
+
+on:
+  workflow_dispatch:
+    inputs:
+      #Source image tag.
+      INPUT_IMAGE_TAG:
+        description: "Source image tag (e.g. 1.0.0-rc.8-RELEASE*)"
+        required: true
+        #default: "latest"
+
+#Global environment variables.
+env:
+  INPUT_TAG_TYPE: ${{ github.event.inputs.INPUT_TAG_TYPE }}
+  AWS_REGION: ap-southeast-1
+  ECR_REPOSITORY_URL: 104322896078.dkr.ecr.ap-southeast-1.amazonaws.com
+  ECR_REPOSITORY_GROUP: s3-app
+  ECR_REPOSITORY_NAME: backend
+
+#Permissions.
+permissions:
+  contents: read
+
+jobs:
+  list-image-tags:
+    #Runner label.
+    runs-on: ubuntu-latest
+
+    steps:
+      #Log in to the artifact repository.
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      #Verify that the AWS CLI is configured correctly.
+      - name: Verify AWS CLI
+        run: |
+          aws --version
+          aws sts get-caller-identity
+
+      #Retag an image with the AWS CLI.
+      - name: Retag image
+        run: |
+          #Get manifest of existing image.
+          MANIFEST=$(aws ecr batch-get-image --repository-name ${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME} \
+                    --image-ids imageTag=${INPUT_IMAGE_TAG} --query 'images[].imageManifest' --output text)
+
+          #Create new tag.
+          aws ecr put-image --repository-name ${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME} \
+          --image-tag $TARGET_TAG --image-manifest "$MANIFEST"
