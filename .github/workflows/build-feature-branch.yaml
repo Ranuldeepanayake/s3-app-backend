@@ -57,10 +57,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        #token: ${{ secrets.DEPLOYMENT_REPOSITORY_TOKEN }}
-        ssh-key: ${{ secrets.DEPLOYMENT_REPOSITORY_SSH_PRIVATE_KEY }}
-        #Cleans the workspace before checking out code.
-        clean: true
+        clean: true      #Cleans the workspace before checking out code.
         fetch-depth: 0   #Required to push back
 
       #Ensure jq is available. 
