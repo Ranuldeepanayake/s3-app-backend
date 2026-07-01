@@ -59,13 +59,13 @@ jobs:
           echo "VERSION_NUMBER=$VERSION_NUMBER" >> $GITHUB_ENV
           echo "Extracted version number as the target tag: ${VERSION_NUMBER}"
 
-        #Verify if the input image tag exists in the ECR repository.
-      - name: Verify input image tag
+        #Verify if the input image tag exists in the ECR repository and retag.
+      - name: Verify and retag input image tag
         run: |
           #Get manifest of existing image.
           MANIFEST=$(aws ecr batch-get-image --repository-name ${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME} \
                     --image-ids imageTag=${INPUT_IMAGE_TAG} --query 'images[].imageManifest' --output text)
-                    
+
           echo "Manifest data: $MANIFEST"
 
           #Check if the manifest is empty, which means the input image tag does not exist in the ECR repository.
