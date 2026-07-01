@@ -61,6 +61,14 @@ jobs:
           echo "MANIFEST=$MANIFEST" >> $GITHUB_ENV
           echo "Manifest data: ${MANIFEST}"
 
+          #Check if the manifest is empty, which means the input image tag does not exist in the ECR repository.
+          if [ -z "${MANIFEST}" ]; then
+            echo "❌ Input image tag ${INPUT_IMAGE_TAG} does not exist in the ECR repository."
+            exit 1
+          else
+            echo "✅ Input image tag ${INPUT_IMAGE_TAG} exists in the ECR repository."
+          fi
+
         #Extract the version number from the input image tag to be used as the target image tag.
       - name: Prepare target image tag
         run: |          
