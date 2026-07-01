@@ -40,7 +40,7 @@ env:
   COMMIT_EMAIL: github-actions@github.com
   DEPLOYMENT_REPOSITORY: Ranuldeepanayake/helm
   DEPLOYMENT_REPOSITORY_PATH: deployment-repo
-  QA_ENVIRONMENT_SOURCE_FILE: .env/.env-dev
+  QA_ENVIRONMENT_SOURCE_FILE: env/env-dev
   DEV_ENVIRONMENT_DESTINATION_FILE: environments/s3-app/dev/backend-env.yaml
   DEV_ENVIRONMENT_VALUES_FILE: environments/s3-app/dev/values.yaml
   DEPLOYMENT_MANIFEST_SERVICE_NAME: backend
