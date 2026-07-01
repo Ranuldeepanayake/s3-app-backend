@@ -26,19 +26,17 @@ on:
 env:
   INPUT_ACTION: ${{ github.event.inputs.INPUT_ACTION || 'build-and-deploy' }} #Default needed since the workflow will not use the input default when run on-push.
   VERSION_FILE: package.json
-  AWS_REGION: us-east-1
+  AWS_REGION: ap-southeast-1
   AWS_USERNAME: AWS
-  ECR_REPOSITORY_URL: public.ecr.aws/l4a5c1v5
-  ECR_REPOSITORY_GROUP: qba
-  ECR_REPOSITORY_NAME: qba-back-end
+  ECR_REPOSITORY_URL: 104322896078.dkr.ecr.ap-southeast-1.amazonaws.com
+  ECR_REPOSITORY_GROUP: s3-app
+  ECR_REPOSITORY_NAME: backend
   PARENT_BRANCH: develop
-  TEMPORARY_BRANCH: merge-temp-release-to-develop
   COMMIT_USERNAME: github-actions
   COMMIT_EMAIL: github-actions@github.com
-  QA_ENVIRONMENT_VALUES_FILE: environments/qba/qa/values.yaml
-  QA_ENVIRONMENT_ENV_FILE: environments/qba/qa/qba-back-end-env.yaml
-  DEPLOYMENT_REPOSITORY: Ranuldeepanayake/qba-helm
-  CODE_REPOSITORY: Ranuldeepanayake/qba-back-end
+  QA_ENVIRONMENT_VALUES_FILE: environments/s3-app/qa/values.yaml
+  QA_ENVIRONMENT_ENV_FILE: environments/s3-app/qa/backend-env.yaml
+  DEPLOYMENT_REPOSITORY: Ranuldeepanayake/helm
 
 #Permissions.
 permissions:
@@ -49,17 +47,23 @@ jobs:
   build-feature-branch:
 
     #Runner label.
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
       #Checkout the branch which is being built.
     - name: Checkout code
       uses: actions/checkout@v4
       with:
+        with:
+        #token: ${{ secrets.DEPLOYMENT_REPOSITORY_TOKEN }}
+        ssh-key: ${{ secrets.DEPLOYMENT_REPOSITORY_SSH_PRIVATE_KEY }}
         #Cleans the workspace before checking out code.
         clean: true
-        #Fetches full history for tags to work.
-        fetch-depth: 0
+        fetch-depth: 0   #Required to push back
+
+      #Ensure jq is available. 
+    - name: Install jq 
+      run: sudo apt update && sudo apt install -y jq
 
       #Check if the version number is in the correct format.
     - name: Validate version number
@@ -142,10 +146,15 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
 
-      #Log in to the artifact repository.
-    - name: Login to the artifact repository
-      run: |
-        aws ecr-public get-login-password --region ${AWS_REGION} | docker login --username ${AWS_USERNAME} --password-stdin ${ECR_REPOSITORY_URL}
+     #Log in to the artifact repository (private).
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+      #Log in to the artifact repository (public).
+    # - name: Login to the artifact repository
+    #   run: |
+    #     aws ecr-public get-login-password --region ${AWS_REGION} | docker login --username ${AWS_USERNAME} --password-stdin ${ECR_REPOSITORY_URL}
 
       #Build the image.
     - name: Build image
@@ -220,6 +229,7 @@ jobs:
 
     #Checkout the gitops repository.
     - name: Checkout code
+      if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       uses: actions/checkout@v4
       with:
         repository: ${{ env.DEPLOYMENT_REPOSITORY }}
@@ -237,6 +247,7 @@ jobs:
 
       #Copy environment variables to the deployment repository.
     - name: Copy the .env file
+      if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       run: |
         cp .env/.env-qa deployment-repo/${QA_ENVIRONMENT_ENV_FILE}
         cd deployment-repo
@@ -264,6 +275,7 @@ jobs:
 
     #Commit and push the change to the deployment repository.
     - name: Commit and push
+      if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       run: |
         cd deployment-repo
 

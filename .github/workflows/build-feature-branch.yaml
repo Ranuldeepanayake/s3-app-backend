@@ -39,7 +39,7 @@ env:
   COMMIT_USERNAME: github-actions
   COMMIT_EMAIL: github-actions@github.com
   DEV_ENVIRONMENT_VALUES_FILE: environments/s3-app/dev/values.yaml
-  DEV_ENVIRONMENT_ENV_FILE: environments/s3-app/dev/qba-back-end-env.yaml
+  DEV_ENVIRONMENT_ENV_FILE: environments/s3-app/dev/backend-env.yaml
   DEPLOYMENT_REPOSITORY: Ranuldeepanayake/helm
 
 #Permissions.

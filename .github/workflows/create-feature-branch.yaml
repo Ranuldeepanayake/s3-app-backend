@@ -36,9 +36,13 @@ jobs:
   create-feature-branch:
 
     #Runner label.
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
+        #Ensure jq is available. 
+      - name: Install jq 
+        run: sudo apt update && sudo apt install -y jq
+
         #Check the name format of the new branch name input.
       - name: Validate input branch name
         run: |
@@ -104,6 +108,5 @@ jobs:
         #Create the new branch and push it to remote.
       - name: Create and push branch
         run: |
-          #git checkout ${PARENT_BRANCH}
           git checkout -b ${NEW_BRANCH_NAME}
           git push origin ${NEW_BRANCH_NAME}
