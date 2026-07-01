@@ -3,7 +3,7 @@
 #since a keeping broken build has no value. If the build is successful, increment the rc number in the repo, create a tag and
 #deploy to QA.
 
-name: Build release branch
+name: Deploy to production
 
 #Trigger the workflow on-push and manually.
 on:
