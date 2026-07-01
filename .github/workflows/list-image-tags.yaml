@@ -1,3 +1,5 @@
+#List image tags in a docker image repository based on the tag type (develop, release, feature, bugfix).
+
 name: List image tags
 
 on:

@@ -38,9 +38,12 @@ env:
   ECR_REPOSITORY_NAME: backend
   COMMIT_USERNAME: github-actions
   COMMIT_EMAIL: github-actions@github.com
-  DEV_ENVIRONMENT_VALUES_FILE: environments/s3-app/dev/values.yaml
-  DEV_ENVIRONMENT_ENV_FILE: environments/s3-app/dev/backend-env.yaml
   DEPLOYMENT_REPOSITORY: Ranuldeepanayake/helm
+  DEPLOYMENT_REPOSITORY_PATH: deployment-repo
+  QA_ENVIRONMENT_SOURCE_FILE: .env/.env-dev
+  DEV_ENVIRONMENT_DESTINATION_FILE: environments/s3-app/dev/backend-env.yaml
+  DEV_ENVIRONMENT_VALUES_FILE: environments/s3-app/dev/values.yaml
+  DEPLOYMENT_MANIFEST_SERVICE_NAME: backend
 
 #Permissions.
 permissions:
@@ -192,22 +195,22 @@ jobs:
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       uses: actions/checkout@v4
       with:
-          repository: ${{ env.DEPLOYMENT_REPOSITORY }}
-          #token: ${{ secrets.DEPLOYMENT_REPOSITORY_TOKEN }}
-          ssh-key: ${{ secrets.DEPLOYMENT_REPOSITORY_SSH_PRIVATE_KEY }}
-          path: deployment-repo
-          clean: true      #Cleans the workspace before checking out code.
-          fetch-depth: 0   #Required to push back
+        repository: ${{ env.DEPLOYMENT_REPOSITORY }}
+        #token: ${{ secrets.DEPLOYMENT_REPOSITORY_TOKEN }}
+        ssh-key: ${{ secrets.DEPLOYMENT_REPOSITORY_SSH_PRIVATE_KEY }}
+        path: ${{ env.DEPLOYMENT_REPOSITORY_PATH }}
+        clean: true      #Cleans the workspace before checking out code.
+        fetch-depth: 0   #Required to push back
 
       #Copy environment variables to the deployment repository.
     - name: Copy the .env file
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       run: |
-        cp .env/.env-dev deployment-repo/${DEV_ENVIRONMENT_ENV_FILE}
-        cd deployment-repo
+        cp ${DEV_ENVIRONMENT_SOURCE_FILE} ${DEPLOYMENT_REPOSITORY_PATH}/${DEV_ENVIRONMENT_DESTINATION_FILE}
+        cd ${DEPLOYMENT_REPOSITORY_PATH}
 
         #Verify the change.
-        if [[ -f "${DEV_ENVIRONMENT_ENV_FILE}" ]]; then
+        if [[ -f "${DEV_ENVIRONMENT_DESTINATION_FILE}" ]]; then
           echo "✅ .env file exists"
         else
           echo "❌ .env file does not exist!"
@@ -220,26 +223,26 @@ jobs:
       uses: mikefarah/yq@v4.44.1
       with:
         cmd: |
-          cd deployment-repo
+          cd ${DEPLOYMENT_REPOSITORY_PATH}
           #yq -i '.image.tag = "${{ inputs.image_tag }}"' environments/prod/values.yaml
           #yq e -i '.containers.name.tag = strenv(IMAGE_TAG)' "${DEV_ENVIRONMENT_VALUES_FILE}"
-          yq -i '(.containers[] | select(.name == "backend") | .tag) = env(IMAGE_TAG)' "${DEV_ENVIRONMENT_VALUES_FILE}"
+          yq -i '(.containers[] | select(.name == env(DEPLOYMENT_MANIFEST_SERVICE_NAME)) | .tag) = env(IMAGE_TAG)' "${DEV_ENVIRONMENT_VALUES_FILE}"
 
           #Verify the change.
-          TAG_READ_BACK=$(yq '.containers[] | select(.name == "backend") | .tag' "${DEV_ENVIRONMENT_VALUES_FILE}")
+          TAG_READ_BACK=$(yq '.containers[] | select(.name == env(DEPLOYMENT_MANIFEST_SERVICE_NAME)) | .tag' "${DEV_ENVIRONMENT_VALUES_FILE}")
           echo "Tag read back: $TAG_READ_BACK"
 
     #Commit and push the change to the deployment repository.
     - name: Commit and push
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       run: |
-        cd deployment-repo
+        cd ${DEPLOYMENT_REPOSITORY_PATH}
 
         git config user.name ${COMMIT_USERNAME} 
         git config user.email ${COMMIT_EMAIL}
 
         git add ${DEV_ENVIRONMENT_VALUES_FILE};
-        git add ${DEV_ENVIRONMENT_ENV_FILE};
+        git add ${DEV_ENVIRONMENT_DESTINATION_FILE};
         git commit -m "Pipeline (helm): replaced the image tag with ${IMAGE_TAG} and the .env file" || echo "No changes to commit"
 
         git push
