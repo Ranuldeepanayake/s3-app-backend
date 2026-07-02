@@ -1,33 +1,26 @@
-#Build a release branch, upload the artifact to a repository and update the GitOps repository.
-#Do a build first with an incremented rc number. If the build fails, don't increment the rc number in the repo or create a tag
-#since a keeping broken build has no value. If the build is successful, increment the rc number in the repo, create a tag and
-#deploy to QA.
+#Deploy a production image given as an input and update the GitOps repository.
 
 name: Deploy to production
 
 #Trigger the workflow on-push and manually.
 on:
-  push:
-    branches: 
-    - "release/**"
   workflow_dispatch:
     inputs:
       #Input to select the action.
       INPUT_ACTION:
         description: 'Select action'
         required: true
-        default: build
+        default: deploy
         type: choice
         options:
-          - build
+          - deploy
       INPUT_IMAGE_TAG:
-        description: "Docker image tag (e.g. 1.5.0)"
+        description: "Image tag (e.g. 1.5.0)"
         required: true
-        #default: "latest"
 
 #Global environment variables.
 env:
-  INPUT_ACTION: ${{ github.event.inputs.INPUT_ACTION || 'build-and-deploy' }} #Default needed since the workflow will not use the input default when run on-push.
+  INPUT_ACTION: ${{ github.event.inputs.INPUT_ACTION || 'deploy' }} #Default needed since the workflow will not use the input default when run on-push.
   VERSION_FILE: package.json
   AWS_REGION: ap-southeast-1
   AWS_USERNAME: AWS
