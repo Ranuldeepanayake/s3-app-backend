@@ -50,7 +50,7 @@ permissions:
   pull-requests: write
 
 jobs:
-  build-release-branch:
+  deploy-to-production:
 
     #Runner label.
     runs-on: ubuntu-latest

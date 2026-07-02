@@ -26,7 +26,7 @@ permissions:
   contents: read
 
 jobs:
-  list-image-tags:
+  tag-for-production:
     #Runner label.
     runs-on: ubuntu-latest
 
