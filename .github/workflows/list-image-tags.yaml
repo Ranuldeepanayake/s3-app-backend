@@ -16,6 +16,7 @@ on:
           - RELEASE
           - FEATURE
           - BUGFIX
+          - PRODUCTION
 
 #Global environment variables.
 env:
@@ -49,8 +50,9 @@ jobs:
           aws --version
           aws sts get-caller-identity
 
-      #List image tags with the AWS CLI.
+      #List non-production image tags with the AWS CLI.
       - name: List image tags
+        if : ${{ env.INPUT_TAG_TYPE != 'PRODUCTION' }}
         run: |
           # aws ecr describe-images \
           #   --repository-name "${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}" \
@@ -73,6 +75,16 @@ jobs:
 
           #Extract full tag
           awk '{print $3}'
+
+        #List production image tags with the AWS CLI.
+      - name: List image tags
+        if : ${{ env.INPUT_TAG_TYPE == 'PRODUCTION' }}
+        run: |
+          aws ecr describe-images --repository-name "${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}" \
+          --query "imageDetails[?imageTags!=null].imageTags[]" --output text | tr '\t' '\n' | sort -u | \
+          grep -E "^[0-9]+\.[0-9]+\.[0-9]+$"
+
+
 
 #Show all.
 #--query 'imageDetails[].imageTags[]'
