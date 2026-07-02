@@ -33,8 +33,12 @@ jobs:
       - name: Validate input image tag
         run: |
           #Additional safegaurd to make sure only release branches are built. This is a double check since the version number is already checked to be in the correct format.
-          if [[ "${INPUT_IMAGE_TAG}" != *-rc.*-RELEASE* ]]; then
-          echo "❌ invalid input image tag: ${INPUT_IMAGE_TAG}"
+
+          #Allowed patterns.
+          PATTERN="^[0-9]+\.[0-9]+\.[0]-rc\.[0-9]+-RELEASE.*$"
+
+          if [[ ! "${INPUT_IMAGE_TAG}" =~ $PATTERN ]]; then
+            echo "❌ invalid input image tag: ${INPUT_IMAGE_TAG}"
             exit 1          
           fi
 
