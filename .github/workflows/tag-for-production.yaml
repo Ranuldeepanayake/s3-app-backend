@@ -1,4 +1,7 @@
 #Retag an image. Use this to tag an existing image with a new tag. This is useful for promoting an image to production without rebuilding it.
+#In AWS ECR, a single digest can be tagged with multiple unique tags.
+#However, a single tag can only be associated with a single digest. If you try to retag an image with a tag that already exists, it will remove
+#the existing tag and associate it with the new digest. 
 
 name: Tag for production
 
