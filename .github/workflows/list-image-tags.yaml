@@ -60,8 +60,7 @@ jobs:
           #   --output table
 
           aws ecr describe-images --repository-name "${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}" \
-          --query "imageDetails[?imageTags!=null].imageTags[]" --output text | \
-          grep "$INPUT_TAG_TYPE" | \
+          --query "imageDetails[?imageTags!=null].imageTags[]" --output text | tr '\t' '\n' | grep "$INPUT_TAG_TYPE" | \
 
           #Extract version and timestamp
           awk -F'-' '{
