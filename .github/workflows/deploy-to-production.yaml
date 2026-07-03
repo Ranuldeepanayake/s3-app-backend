@@ -289,3 +289,13 @@ jobs:
         git commit -m "Pipeline (helm): replaced the image tag with ${IMAGE_TAG} and the .env file" || echo "No changes to commit"
 
         git push
+
+    - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "Auto PR commit"
+          title: "Auto PR: Feature changes"
+          body: "This PR was created automatically by GitHub Actions."
+          branch: auto-pr-branch
+          base: main

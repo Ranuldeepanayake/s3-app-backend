@@ -1,5 +1,6 @@
 #Create a new hotfix branch from the main branch, start the version number with x.x.1-rc.0-HOTFIX*.
 #Build the hotfix branch, push the artifact to the image repository and deploy the hotfix branch to the QA environment through the GitOps repository.
+#No need to merge the newly created hotfix branch with main or develop since there won't be any outstanding changes.
 
 name: Create hotfix branch
 
