@@ -1,27 +1,33 @@
-#Deploy a production image given as an input and update the GitOps repository. A pull request must also be created manually to merge the relevant release branch into main
-#without the rc tag (make provisions for this in this pipeline itself with a UI element to choose the release branch to be merged into main).
+#Build a hotfix branch, upload the artifact to a repository and update the GitOps repository.
+#Do a build first with an incremented rc number. If the build fails, don't increment the rc number in the repo or create a tag
+#since a keeping broken build has no value. If the build is successful, increment the rc number in the repo, create a tag and
+#deploy to QA. A new hotfix branch will start with the version x.x.1-rc.0-HOTFIX. When a candidate hotfix is ready for production, 
+#the hotfix branch will be merged into main with the hotfix version number but without the rc tag. The hotfix branch will also be merged into develop to 
+#keep the develop branch up to date with the hotfix changes but without the hotfix version number or rc tag.
+#The hotfix branch will be deleted after the merge into main and develop.
 
-name: Deploy to production
+name: Build release branch
 
 #Trigger the workflow on-push and manually.
 on:
+  push:
+    branches: 
+    - "hotfix/**"
   workflow_dispatch:
     inputs:
       #Input to select the action.
       INPUT_ACTION:
         description: 'Select action'
         required: true
-        default: deploy
+        default: build-and-deploy
         type: choice
         options:
-          - deploy
-      INPUT_IMAGE_TAG:
-        description: "Image tag (e.g. 1.5.0)"
-        required: true
+          - build
+          - build-and-deploy
 
 #Global environment variables.
 env:
-  INPUT_ACTION: ${{ github.event.inputs.INPUT_ACTION || 'deploy' }} #Default needed since the workflow will not use the input default when run on-push.
+  INPUT_ACTION: ${{ github.event.inputs.INPUT_ACTION || 'build-and-deploy' }} #Default needed since the workflow will not use the input default when run on-push.
   VERSION_FILE: package.json
   AWS_REGION: ap-southeast-1
   AWS_USERNAME: AWS
@@ -44,7 +50,7 @@ permissions:
   pull-requests: write
 
 jobs:
-  deploy-to-production:
+  build-release-branch:
 
     #Runner label.
     runs-on: ubuntu-latest
