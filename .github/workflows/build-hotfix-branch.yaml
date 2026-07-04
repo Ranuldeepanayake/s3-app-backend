@@ -6,7 +6,7 @@
 #keep the develop branch up to date with the hotfix changes but without the hotfix version number or rc tag.
 #The hotfix branch will be deleted after the merge into main and develop.
 
-name: Build release branch
+name: Build hotfix branch
 
 #Trigger the workflow on-push and manually.
 on:
@@ -54,7 +54,7 @@ permissions:
   pull-requests: write
 
 jobs:
-  build-release-branch:
+  build-hotfix-branch:
 
     #Runner label.
     runs-on: ubuntu-latest
