@@ -32,8 +32,12 @@ env:
   ECR_REPOSITORY_GROUP: s3-app
   ECR_REPOSITORY_NAME: backend
   PARENT_BRANCH: develop
+  PRODUCTION_BRANCH: main
   COMMIT_USERNAME: github-actions
   COMMIT_EMAIL: github-actions@github.com
+  PR_REVIEWERS: ranuldeepanayake
+  PR_ASSIGNEES: ranuldeepanayake
+  PR_LABELS: ci,release
   DEPLOYMENT_REPOSITORY: Ranuldeepanayake/helm
   DEPLOYMENT_REPOSITORY_PATH: deployment-repo
   QA_ENVIRONMENT_SOURCE_FILE: env/env-qa
@@ -216,7 +220,7 @@ jobs:
         git checkout ${PARENT_BRANCH}
         echo "Selected branch: $(git branch)"
 
-    # #Merge the release branch into the develop branch except for the version file, commit and push.
+    #Merge the release branch into the develop branch except for the version file, commit and push.
     - name: Merge release into develop
       run: |
         echo "Branch name: ${BRANCH_NAME}"
@@ -227,6 +231,20 @@ jobs:
 
         git commit --allow-empty -m "Pipeline (merged develop with release): merged ${PARENT_BRANCH} with ${BRANCH_NAME} and incremeted the rc tag to ${INCREMENTED_VERSION}"
         git push origin ${PARENT_BRANCH}
+
+      #Create a pull request.
+    - name: Create pull request
+      uses: peter-evans/create-pull-request@v6
+      with:
+        #token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}"
+        title: "Pipeline (release): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}"
+        body: "Pipeline (release): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} from ${{ env.BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
+        branch: ${{ env.BRANCH_NAME }}
+        base: ${{ env.PRODUCTION_BRANCH }}    #Destination branch for the pull request.
+        reviewers: ${{ env.PR_REVIEWERS }}
+        assignees: ${{ env.PR_ASSIGNEES }}
+        labels: ${{ env.PR_LABELS }}
 
     #Deployment. The .env file must be copied to the deployment repository regardless whether the file is deployed or not. But why though??
     #It is better not to copy since a change would trigger a deployment even if the image tag is not changed. So, only copy the .env file if the deploy option is selected.

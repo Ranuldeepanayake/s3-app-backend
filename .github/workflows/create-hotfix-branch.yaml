@@ -148,7 +148,7 @@ jobs:
           git commit --allow-empty -m "Pipeline (hotfix branch creation): created a hotfix branch ${NEW_BRANCH_NAME} with version ${RC_VERSION}"
 
           #Create a git tag.
-          git tag -a ${RC_VERSION} -m "Release candidate tag ${RC_VERSION}"
+          git tag -a ${RC_VERSION} -m "Hotfix release candidate tag ${RC_VERSION}"
           echo "Tags: $(git tag -l)"
 
           #Push the branch.

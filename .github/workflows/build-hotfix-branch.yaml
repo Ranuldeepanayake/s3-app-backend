@@ -221,7 +221,7 @@ jobs:
     - name: Create pull request
       uses: peter-evans/create-pull-request@v6
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+        #token: ${{ secrets.GITHUB_TOKEN }}
         commit-message: "Pipeline (hotfix): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PARENT_BRANCH }}"
         title: "Pipeline (hotfix): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PARENT_BRANCH }}"
         body: "Pipeline (hotfix): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} from ${{ env.BRANCH_NAME }} into ${{ env.PARENT_BRANCH }}"
@@ -235,7 +235,7 @@ jobs:
     - name: Create pull request
       uses: peter-evans/create-pull-request@v6
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+        #token: ${{ secrets.GITHUB_TOKEN }}
         commit-message: "Pipeline (hotfix): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}"
         title: "Pipeline (hotfix): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}"
         body: "Pipeline (hotfix): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} from ${{ env.BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"

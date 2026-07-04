@@ -1,5 +1,5 @@
-#Deploy a production image given as an input and update the GitOps repository. A pull request must also be created manually to merge the relevant release branch into main
-#without the rc tag (make provisions for this in this pipeline itself with a UI element to choose the release branch to be merged into main).
+#Deploy a production image given as an input and update the GitOps repository. A pull request must also be created to merge the release or hotfix branch which 
+#is the source of the image into the main branch.
 
 name: Deploy to production
 
@@ -7,35 +7,21 @@ name: Deploy to production
 on:
   workflow_dispatch:
     inputs:
-      #Input to select the action.
-      INPUT_ACTION:
-        description: 'Select action'
-        required: true
-        default: deploy
-        type: choice
-        options:
-          - deploy
+      #Source image tag.
       INPUT_IMAGE_TAG:
-        description: "Image tag (e.g. 1.5.0)"
+        description: "Image tag (ex- 1.5.0, 1.6.2)"
         required: true
 
 #Global environment variables.
 env:
-  INPUT_ACTION: ${{ github.event.inputs.INPUT_ACTION || 'deploy' }} #Default needed since the workflow will not use the input default when run on-push.
-  VERSION_FILE: package.json
-  AWS_REGION: ap-southeast-1
-  AWS_USERNAME: AWS
-  ECR_REPOSITORY_URL: 104322896078.dkr.ecr.ap-southeast-1.amazonaws.com
-  ECR_REPOSITORY_GROUP: s3-app
-  ECR_REPOSITORY_NAME: backend
-  PARENT_BRANCH: develop
+  PARENT_BRANCH: main
   COMMIT_USERNAME: github-actions
   COMMIT_EMAIL: github-actions@github.com
   DEPLOYMENT_REPOSITORY: Ranuldeepanayake/helm
   DEPLOYMENT_REPOSITORY_PATH: deployment-repo
-  QA_ENVIRONMENT_SOURCE_FILE: env/env-qa
-  QA_ENVIRONMENT_DESTINATION_FILE: environments/s3-app/qa/backend-env.yaml
-  QA_ENVIRONMENT_VALUES_FILE: environments/s3-app/qa/values.yaml
+  PROD_ENVIRONMENT_SOURCE_FILE: env/env-prod
+  PROD_ENVIRONMENT_DESTINATION_FILE: environments/s3-app/prod/backend-env.yaml
+  PROD_ENVIRONMENT_VALUES_FILE: environments/s3-app/prod/values.yaml
   DEPLOYMENT_MANIFEST_SERVICE_NAME: backend
 
 #Permissions.
@@ -65,172 +51,33 @@ jobs:
     - name: Install jq 
       run: sudo apt update && sudo apt install -y jq
 
-      #Check if the version number is in the correct format.
-    - name: Validate version number
+      #Check if the image tag is in the correct format.
+    - name: Validate image tag
       run: |
-        echo "Version file: ${VERSION_FILE}"
-
-        #Read the version file.
-        VERSION_NUMBER=$(jq -r '.version' ${VERSION_FILE} | tr -d '\n')
-        
-        #Append the version number variable to the array of runtime variables.
-        echo "VERSION_NUMBER=$VERSION_NUMBER" >> $GITHUB_ENV
-        echo "Version number: ${VERSION_NUMBER}"
+        echo "Input image tag: ${INPUT_IMAGE_TAG}"
         
         #Allowed patterns.
-        PATTERN="([0-9]+\.[0-9]+\.[0]-rc\.[0-9]+){1,1}"
+        PATTERN_1="([0-9]+\.[0-9]+\.[0]){1,1}"
+        PATTERN_2="([0-9]+\.[0-9]+\.[0-9]+){1,1}"
 
-        if [[ ! ${VERSION_NUMBER} =~ $PATTERN ]]; then
-          echo "❌ Version number ${VERSION_NUMBER} is inconsistent with the format. Exiting!"
-          echo "Allowed formats: x.x.0-rc.x"
-          exit 1
+        if [[ "${INPUT_IMAGE_TAG}" =~ $PATTERN_1 ]]; then
+          echo "RELEASE image tag selected: ${INPUT_IMAGE_TAG}"
+        eliif [[ "${INPUT_IMAGE_TAG}" =~ $PATTERN_2 ]]; then
+          echo "HOTFIX image tag selected: ${INPUT_IMAGE_TAG}"
         else
-          echo "✅ Version number ${VERSION_NUMBER} is consistent with the format"
-        fi
-
-    #Read and increment the rc number.
-    - name: Increment the rc number
-      run: |
-        #Read the version number.
-        VERSION_NUMBER_FIRST_SEGMENT=$(echo ${VERSION_NUMBER} | awk -F '-rc.' '{print $1}' | tr -d '\n')
-        RC_TAG=$(echo ${VERSION_NUMBER} | awk -F '-rc.' '{print $2}' | tr -d '\n')
-
-        echo "Version number first segment: $VERSION_NUMBER_FIRST_SEGMENT"
-        echo "RC tag: $RC_TAG"
-
-        #Increment the rc tag.
-        INCREMENTED_VERSION="$VERSION_NUMBER_FIRST_SEGMENT-rc.$((RC_TAG + 1))"
-        echo "INCREMENTED_VERSION=$INCREMENTED_VERSION" >> $GITHUB_ENV
-          
-        echo "Incremented version: ${INCREMENTED_VERSION}"
-
-        #Allowed patterns.
-        PATTERN="([0-9]+\.[0-9]+\.[0]-rc\.[0-9]+){1,1}"
-
-        if [[ ! ${INCREMENTED_VERSION} =~ $PATTERN ]]; then
-          echo "❌ Version number ${INCREMENTED_VERSION} is inconsistent with the format. Exiting!"
-          echo "Allowed formats: x.x.0-rc.x"
-          exit 1
-        else
-          echo "✅ Version number ${INCREMENTED_VERSION} is consistent with the format"
-        fi
-
-     #Prepare the image tag with the necessary appends.
-    - name: Prepare image tag
-      run: | 
-        #Append the time stamp variable to the array of runtime variables.
-        BUILD_TIMESTAMP=$(date +'%Y%m%d_%H%M%S')
-        echo "BUILD_TIMESTAMP=$BUILD_TIMESTAMP" >> $GITHUB_ENV
-        echo "Build timestamp: ${BUILD_TIMESTAMP}"
-
-        #Append the commit digest.
-        DIGEST_SHA=COMMITSHA_$(echo "${GITHUB_SHA}" | cut -c1-8)
-        echo "DIGEST_SHA=$DIGEST_SHA" >> $GITHUB_ENV
-        echo "Digest (SHA): ${DIGEST_SHA}"
-
-        #Get the branch name. The below statement handles the change in variable used depending on push/pull.
-        BRANCH_NAME="${GITHUB_REF_NAME:-${GITHUB_HEAD_REF}}"
-        echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
-        echo "Branch name: ${BRANCH_NAME}"
-
-        #Additional safegaurd to make sure only release branches are built. This is a double check since the version number is already checked to be in the correct format.
-        if [[ "${BRANCH_NAME}" != release/* ]]; then
-        echo "❌ invalid branch: ${BRANCH_NAME}"
+          echo "❌ invalid input image tag: ${INPUT_IMAGE_TAG}"
           exit 1          
         fi
 
-        IMAGE_TAG=${INCREMENTED_VERSION}-RELEASE-SNAPSHOT-${BUILD_TIMESTAMP}-${DIGEST_SHA}
-
-        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+        #Append the version number variable to the array of runtime variables.
+        echo "IMAGE_TAG=${INPUT_IMAGE_TAG}" >> $GITHUB_ENV
         echo "Image tag: ${IMAGE_TAG}"
-
-      #Configure the artifact repository credentials.
-    - name: Configure artifact repository credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-
-     #Log in to the artifact repository (private).
-    - name: Login to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v2
-
-      #Log in to the artifact repository (public).
-    # - name: Login to the artifact repository
-    #   run: |
-    #     aws ecr-public get-login-password --region ${AWS_REGION} | docker login --username ${AWS_USERNAME} --password-stdin ${ECR_REPOSITORY_URL}
-
-      #Build the image.
-    - name: Build image
-      run: |
-        echo "Image name: ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG}"
-        docker build -t ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG} .
-
-      #Push the built image to an artifact repository.
-    - name: Push image to artifact repository
-      run: |
-        docker push ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG}
-
-    #Update the version file with the new value.
-    - name: Update version file
-      run: |        
-        jq ".version = \"${INCREMENTED_VERSION}\"" ${VERSION_FILE} > temp.json && mv temp.json ${VERSION_FILE}
-
-        INCREMENTED_VERSION_READ_BACK=$(jq -r '.version' ${VERSION_FILE} | tr -d '\n')
-        echo "Written incremented version: $INCREMENTED_VERSION_READ_BACK"
-
-        #Validate written changes.
-        if [[ ! $INCREMENTED_VERSION_READ_BACK =~ ${INCREMENTED_VERSION} ]]; then
-          echo "❌ Incremented version not written correctly to the version file. Exiting!"
-          exit 1
-        else
-          echo "✅ Incremented version written correctly to the version file"
-        fi
-
-    #Commit and push the changes to the release branch.
-    - name: Commit and push to release
-      run: |
-        git config user.name ${COMMIT_USERNAME} 
-        git config user.email ${COMMIT_EMAIL}
-
-        git add ${VERSION_FILE}
-        git commit -m "Pipeline (rc tag increment): incremeted the rc tag to ${INCREMENTED_VERSION}" || echo "No changes to commit"
-
-        #Create a git tag.
-        git tag -a ${INCREMENTED_VERSION} -m "Release candidate tag ${INCREMENTED_VERSION}"
-        echo "Tags: $(git tag -l)"
-        
-        git push origin ${BRANCH_NAME}
-
-        #Push the tag.
-        git push origin ${INCREMENTED_VERSION}
-
-    #Checkout the parent branch.
-    - name: Checkout develop branch
-      run: |
-        git checkout ${PARENT_BRANCH}
-        echo "Selected branch: $(git branch)"
-
-    # #Merge the release branch into the develop branch except for the version file, commit and push.
-    - name: Merge release into develop
-      run: |
-        echo "Branch name: ${BRANCH_NAME}"
-
-        git merge --no-commit --no-ff ${BRANCH_NAME} || true
-        git checkout --ours ${VERSION_FILE}
-        git add ${VERSION_FILE}
-
-        git commit --allow-empty -m "Pipeline (merged develop with release): merged ${PARENT_BRANCH} with ${BRANCH_NAME} and incremeted the rc tag to ${INCREMENTED_VERSION}"
-        git push origin ${PARENT_BRANCH}
 
     #Deployment. The .env file must be copied to the deployment repository regardless whether the file is deployed or not. But why though??
     #It is better not to copy since a change would trigger a deployment even if the image tag is not changed. So, only copy the .env file if the deploy option is selected.
 
     #Checkout the gitops repository.
     - name: Checkout code
-      if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       uses: actions/checkout@v4
       with:
         repository: ${{ env.DEPLOYMENT_REPOSITORY }}
@@ -242,20 +89,18 @@ jobs:
 
       #Checkout the release branch again to get the .env file.
     - name: Checkout release branch
-      if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       run: |
         git checkout ${BRANCH_NAME}
         echo "Selected branch: $(git branch)"
 
       #Copy environment variables to the deployment repository.
     - name: Copy the .env file
-      if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       run: |
-        cp ${QA_ENVIRONMENT_SOURCE_FILE} ${DEPLOYMENT_REPOSITORY_PATH}/${QA_ENVIRONMENT_DESTINATION_FILE}
+        cp ${PROD_ENVIRONMENT_SOURCE_FILE} ${DEPLOYMENT_REPOSITORY_PATH}/${PROD_ENVIRONMENT_DESTINATION_FILE}
         cd ${DEPLOYMENT_REPOSITORY_PATH}
 
         #Verify the change.
-        if [[ -f "${QA_ENVIRONMENT_DESTINATION_FILE}" ]]; then
+        if [[ -f "${PROD_ENVIRONMENT_DESTINATION_FILE}" ]]; then
           echo "✅ .env file exists"
         else
           echo "❌ .env file does not exist!"
@@ -264,38 +109,26 @@ jobs:
 
     #Change the image tag. Only if the deploy option is selected.
     - name: Change the image tag
-      if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       uses: mikefarah/yq@v4.44.1
       with:
         cmd: |
           cd ${DEPLOYMENT_REPOSITORY_PATH}
-          yq -i '(.containers[] | select(.name == env(DEPLOYMENT_MANIFEST_SERVICE_NAME)) | .tag) = env(IMAGE_TAG)' "${QA_ENVIRONMENT_VALUES_FILE}"
+          yq -i '(.containers[] | select(.name == env(DEPLOYMENT_MANIFEST_SERVICE_NAME)) | .tag) = env(IMAGE_TAG)' "${PROD_ENVIRONMENT_VALUES_FILE}"
 
           #Verify the change.
-          TAG_READ_BACK=$(yq '.containers[] | select(.name == env(DEPLOYMENT_MANIFEST_SERVICE_NAME)) | .tag' "${QA_ENVIRONMENT_VALUES_FILE}")
+          TAG_READ_BACK=$(yq '.containers[] | select(.name == env(DEPLOYMENT_MANIFEST_SERVICE_NAME)) | .tag' "${PROD_ENVIRONMENT_VALUES_FILE}")
           echo "Tag read back: $TAG_READ_BACK"
 
     #Commit and push the change to the deployment repository.
     - name: Commit and push
-      if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       run: |
         cd ${DEPLOYMENT_REPOSITORY_PATH}
 
         git config user.name ${COMMIT_USERNAME} 
         git config user.email ${COMMIT_EMAIL}
 
-        git add ${QA_ENVIRONMENT_VALUES_FILE};
-        git add ${QA_ENVIRONMENT_DESTINATION_FILE};
+        git add ${PROD_ENVIRONMENT_VALUES_FILE};
+        git add ${PROD_ENVIRONMENT_DESTINATION_FILE};
         git commit -m "Pipeline (helm): replaced the image tag with ${IMAGE_TAG} and the .env file" || echo "No changes to commit"
 
         git push
-
-    - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "Auto PR commit"
-          title: "Auto PR: Feature changes"
-          body: "This PR was created automatically by GitHub Actions."
-          branch: auto-pr-branch
-          base: main
