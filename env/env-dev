@@ -1,6 +1,9 @@
 env:
   backend:
-    PORT: 3000
-    VAULT_HOST: https://vault.vault.svc.cluster.local
-    VAULT_PORT: 8200
-    SECRETS_TOKEN: VAULT_TOKEN
+    HOST: 0.0.0.0
+    PORT: 3100
+    AWS_URL_EXPIRATION: 3600
+    MAX_IMAGE_SIZE_BYTES: 5242880
+    JWT_EXPIRATION: 1h
+#Some sensistive environment variables have been mounted as secrets. These secrets are mounted as environment variables in the container.
+
