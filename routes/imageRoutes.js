@@ -18,7 +18,8 @@ const router = express.Router();
 const bucketName = process.env.AWS_BUCKET_NAME;
 const urlExpiration = Number(process.env.AWS_URL_EXPIRATION || 3600);
 
-// Store uploaded files in a temporary directory rather than memory.
+// Store uploaded files in a temporary directory rather than memory. This keeps
+// memory usage predictable when several users upload images at the same time.
 const uploadDir = path.join(__dirname, '..', 'tmp');
 
 // Ensure the temporary upload directory exists, creating it if necessary.
@@ -29,7 +30,8 @@ if (!fs.existsSync(uploadDir)) {
   logger.info('ROUTES', `Using existing upload temp directory at ${uploadDir}`);
 }
 
-// Multer storage configuration for handling image uploads.
+// Multer writes each upload to disk using a collision-resistant local filename.
+// S3 receives a separate key below, so the temp filename is only an upload aid.
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => cb(null, `${Date.now()}-${uuidv4()}-${file.originalname}`)
@@ -37,7 +39,8 @@ const storage = multer.diskStorage({
 
 const maxFileSize = Number(process.env.MAX_IMAGE_SIZE_BYTES || 5 * 1024 * 1024);
 
-// Multer configuration for handling image uploads with size limits and file type filtering.
+// Multer applies the same file size limit to create and update requests, and it
+// rejects non-image MIME types before route logic touches S3.
 const upload = multer({
   storage,
   limits: { fileSize: maxFileSize },
@@ -50,7 +53,8 @@ const upload = multer({
   }
 });
 
-// Generate a signed URL for an object in S3.
+// Generate a short-lived signed URL for an object in S3. The API stores only
+// the object key; URLs are derived on demand so expiration remains fresh.
 const createSignedUrl = async (key) => {
   const command = new GetObjectCommand({
     Bucket: bucketName,
@@ -60,14 +64,16 @@ const createSignedUrl = async (key) => {
   return getSignedUrl(s3Client, command, { expiresIn: urlExpiration });
 };
 
-// Serialize an image document to include a signed URL for access.
+// Serialize a Mongoose document before responding, adding the transient signed
+// URL expected by the frontend.
 const serializeImage = async (imageDoc) => {
   const image = imageDoc.toObject();
   image.url = await createSignedUrl(image.key);
   return image;
 };
 
-// Find an image by either its MongoDB _id or its custom imageId.
+// Find an image by either its MongoDB _id or its public imageId. Supporting
+// both keeps older clients and direct database references working.
 const findImageByIdentifier = async (identifier) => {
   if (!identifier) {
     return null;
@@ -82,7 +88,8 @@ const findImageByIdentifier = async (identifier) => {
   return Image.findOne({ imageId: identifier });
 };
 
-// Upload a new image to S3 and store metadata in MongoDB.
+// Upload sequence: accept the temp file, create a unique S3 key, upload the
+// bytes, delete the temp file, then save metadata that points at the object.
 router.post('/', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
@@ -160,7 +167,8 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Update an existing image, replacing the object in S3 if a new file is supplied.
+// Update can rename metadata only, or replace the S3 object when a new file is
+// supplied. The old object is deleted before the new key is saved.
 router.put('/:id', upload.single('image'), async (req, res) => {
   try {
     const image = await findImageByIdentifier(req.params.id);
@@ -219,7 +227,8 @@ router.put('/:id', upload.single('image'), async (req, res) => {
   }
 });
 
-// Delete all images from S3 and the database. Requires a valid JWT.
+// Delete all images from S3 and the database. Individual S3 delete failures are
+// logged and skipped so stale/missing objects do not block database cleanup.
 router.delete('/delete-all', authenticateToken, async (req, res) => {
   try {
     const images = await Image.find();

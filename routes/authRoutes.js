@@ -4,12 +4,16 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 
 const router = express.Router();
+
+// Credentials are environment-driven for this demo API. Override every default
+// below before exposing the service outside local development.
 const jwtSecret = process.env.JWT_SECRET || 'change-me';
 const authUsername = process.env.AUTH_USERNAME || 'admin';
 const authPassword = process.env.AUTH_PASSWORD || 'admin123';
 const tokenExpiration = process.env.JWT_EXPIRATION || '12h';
 
-// Middleware to authenticate requests using JWT tokens.
+// Middleware to authenticate requests using JWT bearer tokens. Successful
+// verification stores the decoded payload on req.user for later handlers.
 const authenticateToken = (req, res, next) => {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
@@ -28,7 +32,8 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Login route that checks the provided username and password against environment variables.
+// Login compares the submitted credentials with the configured values and
+// returns a short-lived admin token for protected routes.
 router.post('/login', (req, res) => {
   const { username, password } = req.body || {};
 

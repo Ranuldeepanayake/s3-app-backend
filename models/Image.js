@@ -1,4 +1,5 @@
-//Database model for storing image metadata in MongoDB using Mongoose.
+// Database model for image metadata. The binary image bytes live in S3; MongoDB
+// stores the lookup data needed to list, sign, update, and delete those objects.
 
 const mongoose = require('mongoose');
 
@@ -35,6 +36,8 @@ const imageSchema = new mongoose.Schema(
     }
   },
   {
+    // createdAt/updatedAt are useful for auditing edits; uploadedAt preserves
+    // the original user-facing upload time.
     timestamps: true
   }
 );

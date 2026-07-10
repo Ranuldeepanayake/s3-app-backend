@@ -3,6 +3,8 @@
 const mongoose = require('mongoose');
 const logger = require('./logger');
 
+// Uses MongoDB's ping command instead of only checking Mongoose state, because
+// the driver can be connected while the server is no longer reachable.
 const isMongoHealthy = async () => {
   if (mongoose.connection.readyState !== 1 || !mongoose.connection.db) {
     return false;
@@ -17,7 +19,8 @@ const isMongoHealthy = async () => {
   }
 };
 
-// Connect to MongoDB with retry logic on failure.
+// Connect to MongoDB with retry logic on failure. The readyState guard prevents
+// duplicate connection attempts while an existing attempt is still pending.
 const connectDB = async () => {
   if (mongoose.connection.readyState === 1 || mongoose.connection.readyState === 2) {
     return;
@@ -38,7 +41,8 @@ const connectDB = async () => {
   }
 };
 
-// Handle MongoDB disconnection and errors.
+// Reconnect after dropped connections so transient database restarts do not
+// require restarting the API process.
 mongoose.connection.on('disconnected', () => {
   logger.warn('MONGO', 'MongoDB disconnected. Retrying connection...');
   setTimeout(() => {

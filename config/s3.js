@@ -3,6 +3,8 @@
 const { S3Client, HeadBucketCommand } = require('@aws-sdk/client-s3');
 const logger = require('./logger');
 
+// A single S3 client is shared by all route handlers. The AWS SDK handles
+// connection reuse and request signing for each command sent through it.
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,
   credentials: {
@@ -11,6 +13,8 @@ const s3Client = new S3Client({
   }
 });
 
+// HeadBucket is a cheap permission and existence check for the configured
+// bucket; it does not read or list user image objects.
 const isS3Healthy = async () => {
   const bucketName = process.env.AWS_BUCKET_NAME;
 
@@ -28,7 +32,8 @@ const isS3Healthy = async () => {
   }
 };
 
-// Test S3 connection by checking if the specified bucket exists and is accessible.
+// Test S3 connection by checking if the specified bucket exists and is
+// accessible, retrying to absorb short-lived AWS/network failures at startup.
 const testS3Connection = async ({ retries = 3, delayMs = 2000 } = {}) => {
   const bucketName = process.env.AWS_BUCKET_NAME;
 

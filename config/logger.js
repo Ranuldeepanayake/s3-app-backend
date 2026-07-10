@@ -1,7 +1,10 @@
-//Logger function to log messages with timestamp and component context.
+// Small logging wrapper that keeps console output consistent without pulling in
+// a full logging framework.
 
 const formatTimestamp = () => new Date().toISOString();
 
+// The component label makes it easier to filter logs by subsystem in Docker or
+// cloud log viewers.
 const logWithContext = (level, component, message, meta) => {
   const base = `[${formatTimestamp()}] [${component}] ${message}`;
   if (meta !== undefined) {

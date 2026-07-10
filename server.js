@@ -20,6 +20,8 @@ app.use(express.urlencoded({ extended: true }));
 const PORT = Number(process.env.PORT || process.env.API_PORT || 3100);
 const HOST = process.env.HOST || '0.0.0.0';
 
+// Used by the protected readiness check so container deployments can report
+// which network address handled the request.
 const getContainerIp = () => {
   const interfaces = os.networkInterfaces();
 
@@ -34,6 +36,8 @@ const getContainerIp = () => {
   return 'unknown';
 };
 
+// Health checks intentionally verify both external dependencies. A degraded
+// response means the process is alive, but image operations may not succeed.
 const checkHealth = async () => {
   const [mongoHealthy, s3Healthy] = await Promise.all([
     require('./config/db').isMongoHealthy(),
@@ -98,6 +102,8 @@ app.get('/api/health/live', async (req, res) => {
   }
 });
 
+// Readiness includes deployment details and is protected because it exposes
+// infrastructure configuration such as bucket name and AWS region.
 app.get('/api/health/ready', authenticateToken, async (req, res) => {
   try {
     const payload = await checkHealth();
@@ -123,7 +129,8 @@ app.get('/api/health/ready', authenticateToken, async (req, res) => {
 
 app.use('/api/auth', authRouter);
 
-// Protect image routes so they only run when MongoDB is available.
+// Short-circuit image routes when MongoDB is unavailable. S3 writes without a
+// metadata record would leave orphaned objects that the API cannot list later.
 app.use(
   '/api/images',
   (req, res, next) => {
@@ -138,7 +145,8 @@ app.use(
   imageRoutes
 );
 
-// Start the server, connect to MongoDB, and verify S3 availability.
+// Startup connects to MongoDB first, then probes S3. S3 failures are logged as
+// degraded startup so the health endpoints can surface the dependency issue.
 const startServer = async () => {
   try {
     logger.info('STARTUP', 'Resolved startup configuration', {
