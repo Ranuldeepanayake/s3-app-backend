@@ -3,6 +3,20 @@
 const mongoose = require('mongoose');
 const logger = require('./logger');
 
+const isMongoHealthy = async () => {
+  if (mongoose.connection.readyState !== 1 || !mongoose.connection.db) {
+    return false;
+  }
+
+  try {
+    await mongoose.connection.db.admin().ping();
+    return true;
+  } catch (error) {
+    logger.warn('MONGO', 'MongoDB healthcheck failed', error.message);
+    return false;
+  }
+};
+
 // Connect to MongoDB with retry logic on failure.
 const connectDB = async () => {
   if (mongoose.connection.readyState === 1 || mongoose.connection.readyState === 2) {
@@ -38,3 +52,4 @@ mongoose.connection.on('error', (error) => {
 });
 
 module.exports = connectDB;
+module.exports.isMongoHealthy = isMongoHealthy;

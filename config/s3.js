@@ -11,6 +11,23 @@ const s3Client = new S3Client({
   }
 });
 
+const isS3Healthy = async () => {
+  const bucketName = process.env.AWS_BUCKET_NAME;
+
+  if (!bucketName) {
+    logger.error('S3', 'AWS_BUCKET_NAME is not configured.');
+    return false;
+  }
+
+  try {
+    await s3Client.send(new HeadBucketCommand({ Bucket: bucketName }));
+    return true;
+  } catch (error) {
+    logger.warn('S3', 'S3 healthcheck failed', error.message);
+    return false;
+  }
+};
+
 // Test S3 connection by checking if the specified bucket exists and is accessible.
 const testS3Connection = async ({ retries = 3, delayMs = 2000 } = {}) => {
   const bucketName = process.env.AWS_BUCKET_NAME;
@@ -23,7 +40,10 @@ const testS3Connection = async ({ retries = 3, delayMs = 2000 } = {}) => {
   for (let attempt = 1; attempt <= retries; attempt += 1) {
     try {
       logger.info('S3', `Attempt ${attempt}/${retries}: testing access to bucket "${bucketName}"...`);
-      await s3Client.send(new HeadBucketCommand({ Bucket: bucketName }));
+      const healthy = await isS3Healthy();
+      if (!healthy) {
+        throw new Error('S3 healthcheck returned unhealthy');
+      }
       logger.info('S3', `Connection successful for bucket "${bucketName}".`);
       return true;
     } catch (error) {
@@ -41,5 +61,6 @@ const testS3Connection = async ({ retries = 3, delayMs = 2000 } = {}) => {
 
 module.exports = {
   s3Client,
-  testS3Connection
+  testS3Connection,
+  isS3Healthy
 };

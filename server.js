@@ -1,15 +1,17 @@
 // Main application entry point for the S3 image CRUD API.
-const express = require('express');
-const mongoose = require('mongoose');
 const dotenv = require('dotenv');
+
+dotenv.config();
+
+const express = require('express');
+const os = require('os');
+const mongoose = require('mongoose');
 const multer = require('multer');
 const connectDB = require('./config/db');
 const imageRoutes = require('./routes/imageRoutes');
-const { router: authRouter } = require('./routes/authRoutes');
-const { testS3Connection } = require('./config/s3');
+const { router: authRouter, authenticateToken } = require('./routes/authRoutes');
+const { testS3Connection, isS3Healthy } = require('./config/s3');
 const logger = require('./config/logger');
-
-dotenv.config();
 
 const app = express();
 app.use(express.json());
@@ -17,6 +19,37 @@ app.use(express.urlencoded({ extended: true }));
 
 const PORT = Number(process.env.PORT || process.env.API_PORT || 3100);
 const HOST = process.env.HOST || '0.0.0.0';
+
+const getContainerIp = () => {
+  const interfaces = os.networkInterfaces();
+
+  for (const values of Object.values(interfaces)) {
+    for (const entry of values || []) {
+      if (entry.family === 'IPv4' && !entry.internal) {
+        return entry.address;
+      }
+    }
+  }
+
+  return 'unknown';
+};
+
+const checkHealth = async () => {
+  const [mongoHealthy, s3Healthy] = await Promise.all([
+    require('./config/db').isMongoHealthy(),
+    isS3Healthy()
+  ]);
+
+  return {
+    status: mongoHealthy && s3Healthy ? 'ok' : 'degraded',
+    mongodb: {
+      status: mongoHealthy ? 'up' : 'down'
+    },
+    s3: {
+      status: s3Healthy ? 'up' : 'down'
+    }
+  };
+};
 
 // Allow browser-based requests from the React frontend during local development.
 app.use((req, res, next) => {
@@ -45,9 +78,47 @@ app.get('/', (req, res) => {
       list: 'GET /api/images',
       getOne: 'GET /api/images/:id',
       update: 'PUT /api/images/:id',
-      delete: 'DELETE /api/images/:id'
+      delete: 'DELETE /api/images/:id',
+      healthcheck: 'GET /api/health/live',
+      protectedHealthcheck: 'GET /api/health/ready'
     }
   });
+});
+
+app.get('/api/health/live', async (req, res) => {
+  try {
+    const payload = await checkHealth();
+    return res.status(payload.status === 'ok' ? 200 : 503).json(payload);
+  } catch (error) {
+    logger.error('HEALTH', 'Unprotected healthcheck failed', error.message);
+    return res.status(503).json({
+      status: 'error',
+      message: 'Healthcheck failed'
+    });
+  }
+});
+
+app.get('/api/health/ready', authenticateToken, async (req, res) => {
+  try {
+    const payload = await checkHealth();
+    return res.status(payload.status === 'ok' ? 200 : 503).json({
+      ...payload,
+      container: {
+        hostname: os.hostname(),
+        ipAddress: getContainerIp()
+      },
+      aws: {
+        region: process.env.AWS_REGION || 'not-set',
+        bucketName: process.env.AWS_BUCKET_NAME || 'not-set'
+      }
+    });
+  } catch (error) {
+    logger.error('HEALTH', 'Protected healthcheck failed', error.message);
+    return res.status(503).json({
+      status: 'error',
+      message: 'Healthcheck failed'
+    });
+  }
 });
 
 app.use('/api/auth', authRouter);
