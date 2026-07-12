@@ -4,8 +4,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-const { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
-const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const { PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { v4: uuidv4 } = require('uuid');
 
 const { s3Client } = require('../config/s3');
@@ -16,7 +15,7 @@ const { authenticateToken } = require('./authRoutes');
 const router = express.Router();
 
 const bucketName = process.env.AWS_BUCKET_NAME;
-const urlExpiration = Number(process.env.AWS_URL_EXPIRATION || 3600);
+const cloudFrontDomainName = process.env.AWS_CLOUDFRONT_DOMAIN_NAME || '';
 
 // Store uploaded files in a temporary directory rather than memory. This keeps
 // memory usage predictable when several users upload images at the same time.
@@ -31,7 +30,8 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 // Multer writes each upload to disk using a collision-resistant local filename.
-// S3 receives a separate key below, so the temp filename is only an upload aid.
+// S3 receives the original filename as its key, so the temp filename is only an
+// upload aid.
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => cb(null, `${Date.now()}-${uuidv4()}-${file.originalname}`)
@@ -53,22 +53,23 @@ const upload = multer({
   }
 });
 
-// Generate a short-lived signed URL for an object in S3. The API stores only
-// the object key; URLs are derived on demand so expiration remains fresh.
-const createSignedUrl = async (key) => {
-  const command = new GetObjectCommand({
-    Bucket: bucketName,
-    Key: key
-  });
+// CloudFront is responsible for serving image bytes. The API returns a stable
+// render URL by combining the configured distribution domain with the S3 key.
+const createCloudFrontUrl = (fileName) => {
+  if (!cloudFrontDomainName) {
+    return null;
+  }
 
-  return getSignedUrl(s3Client, command, { expiresIn: urlExpiration });
+  const domain = cloudFrontDomainName.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  return `https://${domain}/${encodeURIComponent(fileName)}`;
 };
 
-// Serialize a Mongoose document before responding, adding the transient signed
+// Serialize a Mongoose document before responding, adding the CloudFront render
 // URL expected by the frontend.
-const serializeImage = async (imageDoc) => {
+const serializeImage = (imageDoc) => {
   const image = imageDoc.toObject();
-  image.url = await createSignedUrl(image.key);
+  image.fileName = image.fileName || image.key;
+  image.url = createCloudFrontUrl(image.fileName);
   return image;
 };
 
@@ -88,8 +89,8 @@ const findImageByIdentifier = async (identifier) => {
   return Image.findOne({ imageId: identifier });
 };
 
-// Upload sequence: accept the temp file, create a unique S3 key, upload the
-// bytes, delete the temp file, then save metadata that points at the object.
+// Upload sequence: accept the temp file, use the actual filename as the S3 key,
+// upload the bytes, delete the temp file, then save metadata for the object.
 router.post('/', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
@@ -98,15 +99,28 @@ router.post('/', upload.single('image'), async (req, res) => {
 
     logger.info('ROUTES', `Uploading image ${req.file.originalname} to S3`);
     logger.info('ROUTES', `Temporary file created at ${req.file.path}`);
-    const key = `${Date.now()}-${uuidv4()}-${req.file.originalname}`;
+    const fileName = req.file.originalname;
     const imageId = uuidv4();
+
+    const existingImage = await Image.findOne({
+      $or: [{ fileName }, { key: fileName }]
+    });
+
+    if (existingImage) {
+      logger.info('ROUTES', `Deleting temporary file ${req.file.path} after duplicate filename`);
+      fs.unlinkSync(req.file.path);
+      return res.status(409).json({
+        message: 'An image with this file name already exists.'
+      });
+    }
+
     logger.info('ROUTES', `Reading temporary file ${req.file.path} for S3 upload`);
     const fileBuffer = fs.readFileSync(req.file.path);
 
     await s3Client.send(
       new PutObjectCommand({
         Bucket: bucketName,
-        Key: key,
+        Key: fileName,
         Body: fileBuffer,
         ContentType: req.file.mimetype
       })
@@ -118,13 +132,14 @@ router.post('/', upload.single('image'), async (req, res) => {
     const image = await Image.create({
       imageId,
       name: req.file.originalname,
+      fileName,
       size: req.file.size,
       mimeType: req.file.mimetype,
-      key,
+      key: fileName,
       bucket: bucketName
     });
 
-    const response = await serializeImage(image);
+    const response = serializeImage(image);
 
     res.status(201).json({
       message: 'Image uploaded successfully.',
@@ -136,11 +151,11 @@ router.post('/', upload.single('image'), async (req, res) => {
   }
 });
 
-// List all stored images and return signed URLs.
+// List all stored images and return CloudFront render URLs.
 router.get('/', async (req, res) => {
   try {
     const images = await Image.find().sort({ uploadedAt: -1 });
-    const serialized = await Promise.all(images.map((image) => serializeImage(image)));
+    const serialized = images.map((image) => serializeImage(image));
 
     res.json(serialized);
   } catch (error) {
@@ -158,7 +173,7 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ message: 'Image not found.' });
     }
 
-    const response = await serializeImage(image);
+    const response = serializeImage(image);
 
     res.json(response);
   } catch (error) {
@@ -180,14 +195,28 @@ router.put('/:id', upload.single('image'), async (req, res) => {
     let updatedImage = image;
 
     if (req.file) {
+      const newFileName = req.file.originalname;
+
+      const existingImage = await Image.findOne({
+        _id: { $ne: image._id },
+        $or: [{ fileName: newFileName }, { key: newFileName }]
+      });
+
+      if (existingImage) {
+        logger.info('ROUTES', `Deleting temporary file ${req.file.path} after duplicate filename`);
+        fs.unlinkSync(req.file.path);
+        return res.status(409).json({
+          message: 'An image with this file name already exists.'
+        });
+      }
+
       await s3Client.send(
         new DeleteObjectCommand({
           Bucket: image.bucket,
-          Key: image.key
+          Key: image.fileName || image.key
         })
       );
 
-      const newKey = `${Date.now()}-${uuidv4()}-${req.file.originalname}`;
       logger.info('ROUTES', `Temporary file created at ${req.file.path} for update`);
       logger.info('ROUTES', `Reading temporary file ${req.file.path} for update upload`);
       const fileBuffer = fs.readFileSync(req.file.path);
@@ -195,7 +224,7 @@ router.put('/:id', upload.single('image'), async (req, res) => {
       await s3Client.send(
         new PutObjectCommand({
           Bucket: image.bucket,
-          Key: newKey,
+          Key: newFileName,
           Body: fileBuffer,
           ContentType: req.file.mimetype
         })
@@ -205,17 +234,22 @@ router.put('/:id', upload.single('image'), async (req, res) => {
       fs.unlinkSync(req.file.path);
 
       updatedImage.name = req.file.originalname;
+      updatedImage.fileName = newFileName;
       updatedImage.size = req.file.size;
       updatedImage.mimeType = req.file.mimetype;
-      updatedImage.key = newKey;
+      updatedImage.key = newFileName;
     }
 
     if (req.body.name) {
       updatedImage.name = req.body.name;
     }
 
+    if (!updatedImage.fileName) {
+      updatedImage.fileName = updatedImage.key;
+    }
+
     updatedImage = await updatedImage.save();
-    const response = await serializeImage(updatedImage);
+    const response = serializeImage(updatedImage);
 
     res.json({
       message: 'Image updated successfully.',
@@ -238,11 +272,11 @@ router.delete('/delete-all', authenticateToken, async (req, res) => {
         await s3Client.send(
           new DeleteObjectCommand({
             Bucket: image.bucket,
-            Key: image.key
+            Key: image.fileName || image.key
           })
         );
       } catch (error) {
-        logger.warn('ROUTES', `Skipping S3 delete for ${image.key}`, error.message);
+        logger.warn('ROUTES', `Skipping S3 delete for ${image.fileName || image.key}`, error.message);
       }
     }));
 
@@ -270,7 +304,7 @@ router.delete('/:id', async (req, res) => {
     await s3Client.send(
       new DeleteObjectCommand({
         Bucket: image.bucket,
-        Key: image.key
+        Key: image.fileName || image.key
       })
     );
 

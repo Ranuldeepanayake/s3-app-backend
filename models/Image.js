@@ -1,5 +1,6 @@
-// Database model for image metadata. The binary image bytes live in S3; MongoDB
-// stores the lookup data needed to list, sign, update, and delete those objects.
+// Database model for image metadata. The binary image bytes live in S3 and are
+// rendered through CloudFront; MongoDB stores the lookup data needed to list,
+// update, and delete those objects.
 
 const mongoose = require('mongoose');
 
@@ -13,6 +14,11 @@ const imageSchema = new mongoose.Schema(
     name: {
       type: String,
       required: true
+    },
+    fileName: {
+      type: String,
+      required: true,
+      index: true
     },
     size: {
       type: Number,

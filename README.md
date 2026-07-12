@@ -1,13 +1,13 @@
 # s3-app-backend
 
-Express API for uploading, listing, updating, and deleting images in AWS S3, with MongoDB metadata, JWT-protected admin actions, signed image URLs, and health checks for container deployments.
+Express API for uploading, listing, updating, and deleting images in AWS S3, with MongoDB metadata, JWT-protected admin actions, CloudFront render URLs, and health checks for container deployments.
 
 ## What It Does
 
 - Accepts image uploads through `multipart/form-data`
 - Stores image files in an S3 bucket
 - Stores image metadata in MongoDB
-- Generates short-lived signed URLs when images are listed or fetched
+- Returns CloudFront URLs when images are listed or fetched
 - Replaces existing S3 objects during image updates
 - Deletes individual images or, with authentication, all images
 - Uses disk-based temporary upload handling instead of in-memory buffers
@@ -55,7 +55,7 @@ AWS_REGION=us-east-1
 AWS_ACCESS_KEY_ID=your-access-key
 AWS_SECRET_ACCESS_KEY=your-secret-key
 AWS_BUCKET_NAME=your-bucket-name
-AWS_URL_EXPIRATION=3600
+AWS_CLOUDFRONT_DOMAIN_NAME=your-distribution.cloudfront.net
 MAX_IMAGE_SIZE_BYTES=5242880
 AUTH_USERNAME=admin
 AUTH_PASSWORD=admin123
@@ -149,7 +149,7 @@ Protected routes include `GET /api/health/ready`, `GET /api/auth/test-protected`
 | `GET` | `/api/health/live` | No | Check MongoDB and S3 dependency health |
 | `GET` | `/api/health/ready` | Yes | Check dependency health plus container/AWS details |
 | `POST` | `/api/images` | No | Upload an image with form field `image` |
-| `GET` | `/api/images` | No | List images with signed URLs |
+| `GET` | `/api/images` | No | List images with CloudFront URLs |
 | `GET` | `/api/images/:id` | No | Fetch one image by Mongo `_id` or public `imageId` |
 | `PUT` | `/api/images/:id` | No | Rename metadata and optionally replace the uploaded image |
 | `DELETE` | `/api/images/:id` | No | Delete one S3 object and its MongoDB record |
@@ -161,9 +161,22 @@ Uploads use `multer` disk storage. Files are written to a local `tmp` directory,
 
 Only files whose MIME type starts with `image/` are accepted.
 
-## Signed URLs
+The uploaded file's original filename is used as the S3 object key and stored as `fileName`. Uploading or replacing an image with a filename that already exists returns `409` to avoid multiple records pointing at the same CloudFront object.
 
-The database stores S3 bucket and object key metadata, not permanent public URLs. Each list or fetch response generates a fresh signed URL with the expiration configured by `AWS_URL_EXPIRATION`.
+## CloudFront URLs
+
+The API no longer generates S3 signed URLs. The database stores S3 bucket, key, and `fileName` metadata, and each list or fetch response renders `url` from `AWS_CLOUDFRONT_DOMAIN_NAME` plus the stored filename.
+
+Example:
+
+```json
+{
+  "fileName": "photo.jpg",
+  "url": "https://your-distribution.cloudfront.net/photo.jpg"
+}
+```
+
+Configure CloudFront so the distribution can read from the S3 bucket and serve objects by filename.
 
 ## Health Checks
 

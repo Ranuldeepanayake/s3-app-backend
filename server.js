@@ -103,7 +103,7 @@ app.get('/api/health/live', async (req, res) => {
 });
 
 // Readiness includes deployment details and is protected because it exposes
-// infrastructure configuration such as bucket name and AWS region.
+// infrastructure configuration such as bucket, region, and CloudFront domain.
 app.get('/api/health/ready', authenticateToken, async (req, res) => {
   try {
     const payload = await checkHealth();
@@ -115,7 +115,8 @@ app.get('/api/health/ready', authenticateToken, async (req, res) => {
       },
       aws: {
         region: process.env.AWS_REGION || 'not-set',
-        bucketName: process.env.AWS_BUCKET_NAME || 'not-set'
+        bucketName: process.env.AWS_BUCKET_NAME || 'not-set',
+        cloudFrontDomainName: process.env.AWS_CLOUDFRONT_DOMAIN_NAME || 'not-set'
       }
     });
   } catch (error) {
@@ -154,7 +155,9 @@ const startServer = async () => {
       host: HOST,
       mongodbUriConfigured: Boolean(process.env.MONGODB_URI),
       awsBucketConfigured: Boolean(process.env.AWS_BUCKET_NAME),
-      awsRegion: process.env.AWS_REGION || 'not-set'
+      awsRegion: process.env.AWS_REGION || 'not-set',
+      cloudFrontConfigured: Boolean(process.env.AWS_CLOUDFRONT_DOMAIN_NAME),
+      cloudFrontDomainName: process.env.AWS_CLOUDFRONT_DOMAIN_NAME || 'not-set'
     });
 
     await connectDB();
