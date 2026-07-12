@@ -17,6 +17,17 @@ const router = express.Router();
 const bucketName = process.env.AWS_BUCKET_NAME;
 const cloudFrontDomainName = process.env.AWS_CLOUDFRONT_DOMAIN_NAME || '';
 
+const buildStorageFileName = (originalName) => {
+  const extension = path.extname(originalName || '');
+  const baseName = path.basename(originalName || '', extension);
+  const safeBaseName = (baseName || 'image').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  const safeExtension = extension ? extension.toLowerCase() : '';
+  const uniqueSuffix = `${Date.now()}-${uuidv4()}`;
+  return `${safeBaseName || 'image'}-${uniqueSuffix}${safeExtension}`;
+};
+
+router.buildStorageFileName = buildStorageFileName;
+
 // Store uploaded files in a temporary directory rather than memory. This keeps
 // memory usage predictable when several users upload images at the same time.
 const uploadDir = path.join(__dirname, '..', 'tmp');
@@ -68,8 +79,9 @@ const createCloudFrontUrl = (fileName) => {
 // URL expected by the frontend.
 const serializeImage = (imageDoc) => {
   const image = imageDoc.toObject();
-  image.fileName = image.fileName || image.key;
-  image.url = createCloudFrontUrl(image.fileName);
+  const fileName = image.fileName || image.key || image.name;
+  image.fileName = fileName;
+  image.url = createCloudFrontUrl(fileName);
   return image;
 };
 
@@ -99,11 +111,12 @@ router.post('/', upload.single('image'), async (req, res) => {
 
     logger.info('ROUTES', `Uploading image ${req.file.originalname} to S3`);
     logger.info('ROUTES', `Temporary file created at ${req.file.path}`);
-    const fileName = req.file.originalname;
+    const displayName = req.file.originalname;
+    const fileName = buildStorageFileName(displayName);
     const imageId = uuidv4();
 
     const existingImage = await Image.findOne({
-      $or: [{ fileName }, { key: fileName }]
+      fileName
     });
 
     if (existingImage) {
@@ -131,12 +144,10 @@ router.post('/', upload.single('image'), async (req, res) => {
 
     const image = await Image.create({
       imageId,
-      name: req.file.originalname,
+      name: displayName,
       fileName,
       size: req.file.size,
-      mimeType: req.file.mimetype,
-      key: fileName,
-      bucket: bucketName
+      mimeType: req.file.mimetype
     });
 
     const response = serializeImage(image);
@@ -195,11 +206,11 @@ router.put('/:id', upload.single('image'), async (req, res) => {
     let updatedImage = image;
 
     if (req.file) {
-      const newFileName = req.file.originalname;
+      const newFileName = buildStorageFileName(req.file.originalname);
 
       const existingImage = await Image.findOne({
         _id: { $ne: image._id },
-        $or: [{ fileName: newFileName }, { key: newFileName }]
+        fileName: newFileName
       });
 
       if (existingImage) {
@@ -212,8 +223,8 @@ router.put('/:id', upload.single('image'), async (req, res) => {
 
       await s3Client.send(
         new DeleteObjectCommand({
-          Bucket: image.bucket,
-          Key: image.fileName || image.key
+          Bucket: image.bucket || bucketName,
+          Key: image.fileName || image.key || image.name
         })
       );
 
@@ -223,7 +234,7 @@ router.put('/:id', upload.single('image'), async (req, res) => {
 
       await s3Client.send(
         new PutObjectCommand({
-          Bucket: image.bucket,
+          Bucket: image.bucket || bucketName,
           Key: newFileName,
           Body: fileBuffer,
           ContentType: req.file.mimetype
@@ -237,15 +248,10 @@ router.put('/:id', upload.single('image'), async (req, res) => {
       updatedImage.fileName = newFileName;
       updatedImage.size = req.file.size;
       updatedImage.mimeType = req.file.mimetype;
-      updatedImage.key = newFileName;
     }
 
     if (req.body.name) {
       updatedImage.name = req.body.name;
-    }
-
-    if (!updatedImage.fileName) {
-      updatedImage.fileName = updatedImage.key;
     }
 
     updatedImage = await updatedImage.save();
@@ -271,12 +277,12 @@ router.delete('/delete-all', authenticateToken, async (req, res) => {
       try {
         await s3Client.send(
           new DeleteObjectCommand({
-            Bucket: image.bucket,
-            Key: image.fileName || image.key
+            Bucket: image.bucket || bucketName,
+            Key: image.fileName || image.key || image.name
           })
         );
       } catch (error) {
-        logger.warn('ROUTES', `Skipping S3 delete for ${image.fileName || image.key}`, error.message);
+        logger.warn('ROUTES', `Skipping S3 delete for ${image.fileName || image.name}`, error.message);
       }
     }));
 
@@ -303,8 +309,8 @@ router.delete('/:id', async (req, res) => {
 
     await s3Client.send(
       new DeleteObjectCommand({
-        Bucket: image.bucket,
-        Key: image.fileName || image.key
+        Bucket: image.bucket || bucketName,
+        Key: image.fileName || image.key || image.name
       })
     );
 
