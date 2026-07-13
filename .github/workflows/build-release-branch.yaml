@@ -234,26 +234,38 @@ jobs:
         git commit --allow-empty -m "Pipeline (merged release into develop): merged ${BRANCH_NAME} into ${PARENT_BRANCH} and incremented the rc tag to ${INCREMENTED_VERSION}"
         git push origin ${PARENT_BRANCH}
 
-      #Checkout the release branch again for the PR.
-    - name: Checkout develop branch
+    - name: Create Pull Request
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
-        git checkout ${BRANCH_NAME}
-        echo "Selected branch: $(git branch)"
-        echo "Original branch name: ${BRANCH_NAME}"
+        curl -L \
+          -X POST \
+          -H "Accept: application/vnd.github+json" \
+          -H "Authorization: Bearer $GH_TOKEN" \
+          https://api.github.com/repos/${{ github.repository }}/pulls \
+          -d '{
+            "title":"Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}",
+            "head":"${{ env.BRANCH_NAME }}",
+            "base":"${{ env.PRODUCTION_BRANCH }}",
+            "body":"Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} from ${{ env.BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}",
+            "reviewers":["ranuldeepanayake"],
+            "assignees":["ranuldeepanayake"],
+            "labels":["ci","release"]
+          }'
         
-      #Create a pull request.
-    - name: Create pull request
-      uses: peter-evans/create-pull-request@v6
-      with:
-        #token: ${{ secrets.GITHUB_TOKEN }}
-        commit-message: "Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}"
-        title: "Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}"
-        body: "Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} from ${{ env.BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
-        branch: "temp-pr-branch"
-        base: ${{ env.PRODUCTION_BRANCH }}
-        reviewers: ${{ env.PR_REVIEWERS }}
-        assignees: ${{ env.PR_ASSIGNEES }}
-        labels: ${{ env.PR_LABELS }}
+    #   #Create a pull request.
+    # - name: Create pull request
+    #   uses: peter-evans/create-pull-request@v8
+    #   with:
+    #     #token: ${{ secrets.GITHUB_TOKEN }}
+    #     commit-message: "Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}"
+    #     title: "Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}"
+    #     body: "Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} from ${{ env.BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
+    #     branch: "temp-pr-branch"
+    #     base: ${{ env.PRODUCTION_BRANCH }}
+    #     reviewers: ${{ env.PR_REVIEWERS }}
+    #     assignees: ${{ env.PR_ASSIGNEES }}
+    #     labels: ${{ env.PR_LABELS }}
 
     #Deployment. The .env file must be copied to the deployment repository regardless whether the file is deployed or not. But why though??
     #It is better not to copy since a change would trigger a deployment even if the image tag is not changed. So, only copy the .env file if the deploy option is selected.
