@@ -39,6 +39,7 @@ env:
   PR_ASSIGNEES: ranuldeepanayake
   PR_LABELS: ci,release
   DEPLOYMENT_REPOSITORY: Ranuldeepanayake/helm
+  DEPLOYMENT_REPOSITORY_BRANCH: develop
   DEPLOYMENT_REPOSITORY_PATH: deployment-repo
   QA_ENVIRONMENT_SOURCE_FILE: env/env-qa
   QA_ENVIRONMENT_DESTINATION_FILE: environments/s3-app/qa/backend-env.yaml
@@ -230,16 +231,22 @@ jobs:
 
         git commit --allow-empty -m "Pipeline (merged release into develop): merged ${BRANCH_NAME} into ${PARENT_BRANCH} and incremented the rc tag to ${INCREMENTED_VERSION}"
         git push origin ${PARENT_BRANCH}
-        
 
+      #Checkout the release branch again for the PR.
+    - name: Checkout develop branch
+      run: |
+        git checkout ${BRANCH_NAME}
+        echo "Selected branch: $(git branch)"
+        echo "Original branch name: ${BRANCH_NAME}"
+        
       #Create a pull request.
     - name: Create pull request
       uses: peter-evans/create-pull-request@v6
       with:
         #token: ${{ secrets.GITHUB_TOKEN }}
         commit-message: "Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}"
-        title: "Pipeline (release): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}"
-        body: "Pipeline (release): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} from ${{ env.BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
+        title: "Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}"
+        body: "Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} from ${{ env.BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
         branch: ${{ env.BRANCH_NAME }}
         base: ${{ env.PRODUCTION_BRANCH }}    #Destination branch for the pull request.
         reviewers: ${{ env.PR_REVIEWERS }}
@@ -255,6 +262,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         repository: ${{ env.DEPLOYMENT_REPOSITORY }}
+        ref: ${{ env.DEPLOYMENT_REPOSITORY_BRANCH }}
         #token: ${{ secrets.DEPLOYMENT_REPOSITORY_TOKEN }}
         ssh-key: ${{ secrets.DEPLOYMENT_REPOSITORY_SSH_PRIVATE_KEY }}
         path: ${{ env.DEPLOYMENT_REPOSITORY_PATH }}
