@@ -22,11 +22,8 @@ const isMongoHealthy = async () => {
 // Connect to MongoDB with retry logic on failure. The readyState guard prevents
 // duplicate connection attempts while an existing attempt is still pending.
 const connectDB = async () => {
-  if (mongoose.connection.readyState === 1 || mongoose.connection.readyState === 2) {
-    return;
-  }
-
   try {
+<<<<<<< HEAD
     await mongoose.connect(process.env.MONGODB_URI, {
       serverSelectionTimeoutMS: 5000,
       autoIndex: true
@@ -55,5 +52,15 @@ mongoose.connection.on('error', (error) => {
   logger.error('MONGO', 'MongoDB runtime error', error.message);
 });
 
+=======
+    await mongoose.connect(process.env.MONGODB_URI);
+    console.log('MongoDB connected');
+  } catch (error) {
+    console.error('MongoDB connection error:', error.message);
+    process.exit(1);
+  }
+};
+
+>>>>>>> parent of 85dc14c (Mongodb connection works)
 module.exports = connectDB;
 module.exports.isMongoHealthy = isMongoHealthy;

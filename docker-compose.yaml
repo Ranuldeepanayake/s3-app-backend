@@ -1,9 +1,10 @@
 ---
 services:
   s3-app-backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image:
+      build:
+        context: .
+        dockerfile: Dockerfile
     container_name: s3-app-backend
     restart: unless-stopped
     networks:
@@ -11,9 +12,13 @@ services:
     ports:
       - "3100:3100"
     environment:
+<<<<<<< HEAD
       #- MAX_IMAGE_SIZE_BYTES=5242880
     env_file:
       - .env
+=======
+      TEST_ENV: "AWS"
+>>>>>>> parent of 85dc14c (Mongodb connection works)
 
 networks:
   s3-app:

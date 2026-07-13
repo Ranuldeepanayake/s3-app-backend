@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 // Main application entry point for the S3 image CRUD API.
+=======
+const express = require('express');
+>>>>>>> parent of 85dc14c (Mongodb connection works)
 const dotenv = require('dotenv');
 
 dotenv.config();
@@ -74,6 +78,14 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use((err, req, res, next) => {
+  console.error(`[${new Date().toISOString()}] Error on ${req.method} ${req.originalUrl}:`, err.message);
+  res.status(err.status || 500).json({
+    message: 'Internal server error',
+    error: err.message
+  });
+});
+
 app.get('/', (req, res) => {
   res.json({
     message: 'S3 image CRUD API is running',
@@ -89,6 +101,7 @@ app.get('/', (req, res) => {
   });
 });
 
+<<<<<<< HEAD
 app.get('/api/health/live', async (req, res) => {
   try {
     const payload = await checkHealth();
@@ -145,6 +158,9 @@ app.use(
   },
   imageRoutes
 );
+=======
+app.use('/api/images', imageRoutes);
+>>>>>>> parent of 85dc14c (Mongodb connection works)
 
 // Startup connects to MongoDB first, then probes S3. S3 failures are logged as
 // degraded startup so the health endpoints can surface the dependency issue.
@@ -171,11 +187,17 @@ const startServer = async () => {
       logger.info('STARTUP', `Server running on http://${HOST}:${PORT}`);
     });
   } catch (error) {
+<<<<<<< HEAD
     logger.error('STARTUP', 'Failed to start server', error.message);
+=======
+    console.error('Failed to start server:', error.message);
+    process.exit(1);
+>>>>>>> parent of 85dc14c (Mongodb connection works)
   }
 };
 
 startServer();
+<<<<<<< HEAD
 
 // Centralized error handler for unexpected failures.
 app.use((err, req, res, next) => {
@@ -196,3 +218,5 @@ app.use((err, req, res, next) => {
     error: err.message
   });
 });
+=======
+>>>>>>> parent of 85dc14c (Mongodb connection works)
