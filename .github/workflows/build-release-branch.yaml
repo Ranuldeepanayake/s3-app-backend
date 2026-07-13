@@ -210,23 +210,26 @@ jobs:
         #Push the tag.
         git push origin ${INCREMENTED_VERSION}
 
-    # #Checkout the parent branch.
-    # - name: Checkout develop branch
-    #   run: |
-    #     git checkout ${PARENT_BRANCH}
-    #     echo "Selected branch: $(git branch)"
+    #Checkout the parent branch.
+    - name: Checkout develop branch
+      run: |
+        git checkout ${PARENT_BRANCH}
+        echo "Selected branch: $(git branch)"
+        echo "Original branch name: ${BRANCH_NAME}"
 
-    # #Merge the release branch into the develop branch except for the version file, commit and push.
-    # - name: Merge release into develop
-    #   run: |
-    #     echo "Branch name: ${BRANCH_NAME}"
+    #Merge the release branch into the develop branch except for the version file, commit and push.
+    - name: Merge release into develop
+      run: |
+        echo "Branch name: ${BRANCH_NAME}"
 
-    #     git merge --no-commit --no-ff ${BRANCH_NAME} || true
-    #     git checkout --ours ${VERSION_FILE}
-    #     git add ${VERSION_FILE}
+        git merge --no-commit --no-ff ${BRANCH_NAME} || true
+        git checkout --ours ${VERSION_FILE}
+        git add ${VERSION_FILE}
 
-    #     git commit --allow-empty -m "Pipeline (merged develop with release): merged ${PARENT_BRANCH} with ${BRANCH_NAME} and incremeted the rc tag to ${INCREMENTED_VERSION}"
-    #     git push origin ${PARENT_BRANCH}
+        git status
+
+        # git commit --allow-empty -m "Pipeline (merged develop with release): merged ${PARENT_BRANCH} with ${BRANCH_NAME} and incremeted the rc tag to ${INCREMENTED_VERSION}"
+        # git push origin ${PARENT_BRANCH}
 
     #   #Create a pull request.
     # - name: Create pull request
