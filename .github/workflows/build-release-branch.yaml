@@ -61,9 +61,8 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        with:
-          clean: true      #Cleans the workspace before checking out code.
-          fetch-depth: 0   #Required to push back
+        clean: true      #Cleans the workspace before checking out code.
+        fetch-depth: 0   #Required to push back
 
       #Ensure jq is available. 
     - name: Install jq 
