@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>S3 Image Uploader</title>
+    </head>
+
+    <body>
+        <center><h1>Welcome to the uploader!</h1></center>
+
+        <center>
+        <form action="/upload-image" method="post" enctype="multipart/form-data">
+            <div>
+                <label>Image</label>
+                <input type="file" id="imageField" name="imageField" required>
+            </div>
+            <button type="submit" id="save">Save Changes</button>
+        </form>
+        </center>
+
+    </body>
+ </html>

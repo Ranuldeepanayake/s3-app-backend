@@ -1,0 +1,268 @@
+#Build a feature branch or the develop branch, upload the artifact to a repository and update the GitOps repository.
+
+name: Build feature/develop branch
+
+# if: github.ref == 'refs/heads/develop'
+
+#Trigger the workflow on push, on pull request and manually.
+on:
+  # push:
+  #   branches: 
+    #- '**'
+    #- develop
+    # - "feature/**"
+  pull_request:
+    types: [opened]
+    branches:
+    - develop
+  workflow_dispatch:
+    inputs:
+      #Input to select the action.
+      INPUT_ACTION:
+        description: 'Select action'
+        required: true
+        default: build-and-deploy
+        type: choice
+        options:
+          - build
+          - build-and-deploy
+
+#Global environment variables.
+env:
+  INPUT_ACTION: ${{ github.event.inputs.INPUT_ACTION || 'build-and-deploy' }} #Default needed since the workflow will not use the input default when run on-push.
+  VERSION_FILE: package.json
+  AWS_REGION: ap-southeast-1
+  AWS_USERNAME: AWS
+  ECR_REPOSITORY_URL: 104322896078.dkr.ecr.ap-southeast-1.amazonaws.com
+  ECR_REPOSITORY_GROUP: s3-app
+  ECR_REPOSITORY_NAME: backend
+  COMMIT_USERNAME: github-actions
+  COMMIT_EMAIL: github-actions@github.com
+  DEPLOYMENT_REPOSITORY: Ranuldeepanayake/helm
+  DEPLOYMENT_REPOSITORY_PATH: deployment-repo
+  DEV_ENVIRONMENT_SOURCE_FILE: env/env-dev
+  DEV_ENVIRONMENT_DESTINATION_FILE: environments/s3-app/dev/backend-env.yaml
+  DEV_ENVIRONMENT_VALUES_FILE: environments/s3-app/dev/values.yaml
+  DEPLOYMENT_MANIFEST_SERVICE_NAME: backend
+
+#Permissions.
+permissions:
+  contents: write
+
+jobs:
+  build-feature-branch:
+
+    #Runner label.
+    runs-on: ubuntu-latest
+
+    #Checkout branch which is being built.
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        clean: true      #Cleans the workspace before checking out code.
+        fetch-depth: 0   #Required to push back
+
+      #Ensure jq is available. 
+    - name: Install jq 
+      run: sudo apt update && sudo apt install -y jq
+
+      #Check if the version number is in the correct format.
+    - name: Validate version number
+      run: |
+        echo "Version file: ${VERSION_FILE}"
+
+        #Read the version file.
+        VERSION_NUMBER=$(jq -r '.version' ${VERSION_FILE} | tr -d '\n')
+
+        #If node is installed in the runtime environment.
+        #VERSION_NUMBER=$(node -p "require('./package.json').version") 
+        
+        #Append the version number variable to the array of runtime variables.
+        echo "VERSION_NUMBER=$VERSION_NUMBER" >> $GITHUB_ENV
+        echo "Version number: ${VERSION_NUMBER}"
+        
+        #Allowed patterns.
+        PATTERN="([0-9]+\.[0-9]+\.[0]){1,1}"
+
+        if [[ ! ${VERSION_NUMBER} =~ $PATTERN ]]; then
+          echo "❌ Version number ${VERSION_NUMBER} is inconsistent with the format. Exiting!"
+          echo "Allowed formats: x.x.0"
+          exit 1
+        else
+          echo "✅ Version number ${VERSION_NUMBER} is consistent with the format"
+        fi
+
+      #Prepare the image tag with the necessary appends for branches except pull requests.
+    - name: Prepare image tag
+      if: github.event_name != 'pull_request'
+      run: | 
+        #Append the time stamp variable to the array of runtime variables.
+        BUILD_TIMESTAMP=$(date +'%Y%m%d_%H%M%S')
+        echo "BUILD_TIMESTAMP=$BUILD_TIMESTAMP" >> $GITHUB_ENV
+        echo "Build timestamp: ${BUILD_TIMESTAMP}"
+
+        #Append the commit digest.
+        DIGEST_SHA=COMMITSHA_$(echo "${GITHUB_SHA}" | cut -c1-8)
+        echo "DIGEST_SHA=$DIGEST_SHA" >> $GITHUB_ENV
+        echo "Digest (SHA): ${DIGEST_SHA}"
+
+        #Get the branch name. The below statement handles the change in variable used depending on push/pull.
+        BRANCH_NAME="${GITHUB_REF_NAME:-${GITHUB_HEAD_REF}}"
+        echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+        echo "Branch name: ${BRANCH_NAME}"
+
+        #Conditional image tagging based on feature or develop.
+        if [[ "${BRANCH_NAME}" == feature/* ]]; then
+          #Append the final tag to the array of runtime variables.
+          IMAGE_TAG=${VERSION_NUMBER}-FEATURE-SNAPSHOT-${BUILD_TIMESTAMP}-${DIGEST_SHA}
+        elif [[ "${BRANCH_NAME}" == "develop" ]]; then
+          #Append the final tag to the array of runtime variables.
+          IMAGE_TAG=${VERSION_NUMBER}-DEVELOP-SNAPSHOT-${BUILD_TIMESTAMP}-${DIGEST_SHA}
+        elif [[ "${BRANCH_NAME}" == bugfix/* ]]; then
+          #Append the final tag to the array of runtime variables.
+          IMAGE_TAG=${VERSION_NUMBER}-BUGFIX-SNAPSHOT-${BUILD_TIMESTAMP}-${DIGEST_SHA}
+        else
+          echo "❌ invalid branch: ${BRANCH_NAME}"
+          exit 1
+        fi
+
+        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+        echo "Image tag: ${IMAGE_TAG}"
+
+      #Prepare the image tag with the necessary appends for pull requests only.
+    - name: Prepare image tag
+      if: github.event_name == 'pull_request'
+      run: | 
+        #Append the time stamp variable to the array of runtime variables.
+        BUILD_TIMESTAMP=$(date +'%Y%m%d_%H%M%S')
+        echo "BUILD_TIMESTAMP=$BUILD_TIMESTAMP" >> $GITHUB_ENV
+        echo "Build timestamp: ${BUILD_TIMESTAMP}"
+
+        #Append the commit digest.
+        DIGEST_SHA=COMMITSHA_$(echo "${GITHUB_SHA}" | cut -c1-8)
+        echo "DIGEST_SHA=$DIGEST_SHA" >> $GITHUB_ENV
+        echo "Digest (SHA): ${DIGEST_SHA}"
+
+        #Get the branch name. The below statement handles the change in variable used depending on push/pull.
+        BRANCH_NAME="${GITHUB_REF_NAME:-${GITHUB_HEAD_REF}}"
+        echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+        echo "Branch name: ${BRANCH_NAME}"
+
+        PULL_REQUEST_NUMBER=$(echo ${BRANCH_NAME} | awk -F '/' '{print $1}' | tr -d '\n')
+        echo "PULL_REQUEST_NUMBER=$PULL_REQUEST_NUMBER" >> $GITHUB_ENV
+        echo "Pull request number: ${PULL_REQUEST_NUMBER}"
+
+        IMAGE_TAG=${VERSION_NUMBER}-PULLREQUEST-${PULL_REQUEST_NUMBER}-SNAPSHOT-${BUILD_TIMESTAMP}-${DIGEST_SHA}
+
+        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+        echo "Image tag: ${IMAGE_TAG}"
+
+      #Configure the artifact repository credentials.
+    - name: Configure artifact repository credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+      #Log in to the artifact repository (private).
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+      #Log in to the artifact repository (public).
+    # - name: Login to the artifact repository
+    #   run: |
+    #     aws ecr-public get-login-password --region ${AWS_REGION} | docker login --username ${AWS_USERNAME} --password-stdin ${ECR_REPOSITORY_URL}
+
+      #Build the image.
+    - name: Build image
+      run: |
+        echo "Image name: ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG}"
+        docker build -t ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG} .
+
+      #Push the built image to an artifact repository.
+    - name: Push image to artifact repository
+      run: |
+        docker push ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG}
+
+    #Deployment. The .env file must be copied to the deployment repository regardless whether the file is deployed or not. But why though??
+    #It is better not to copy since a change would trigger a deployment even if the image tag is not changed. So, only copy the .env file if the deploy option is selected.
+
+    #Checkout the gitops repository.
+    - name: Checkout code
+      if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ env.DEPLOYMENT_REPOSITORY }}
+        #token: ${{ secrets.DEPLOYMENT_REPOSITORY_TOKEN }}
+        ssh-key: ${{ secrets.DEPLOYMENT_REPOSITORY_SSH_PRIVATE_KEY }}
+        path: ${{ env.DEPLOYMENT_REPOSITORY_PATH }}
+        clean: true      #Cleans the workspace before checking out code.
+        fetch-depth: 0   #Required to push back
+
+      #Copy environment variables to the deployment repository.
+    - name: Copy the .env file
+      if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
+      run: |
+        cp ${DEV_ENVIRONMENT_SOURCE_FILE} ${DEPLOYMENT_REPOSITORY_PATH}/${DEV_ENVIRONMENT_DESTINATION_FILE}
+        cd ${DEPLOYMENT_REPOSITORY_PATH}
+
+        #Verify the change.
+        if [[ -f "${DEV_ENVIRONMENT_DESTINATION_FILE}" ]]; then
+          echo "✅ .env file exists"
+        else
+          echo "❌ .env file does not exist!"
+          exit 1
+        fi
+
+    #Change the image tag. Only if the deploy option is selected.
+    - name: Change the image tag
+      if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
+      uses: mikefarah/yq@v4.44.1
+      with:
+        cmd: |
+          cd ${DEPLOYMENT_REPOSITORY_PATH}
+          #yq -i '.image.tag = "${{ inputs.image_tag }}"' environments/prod/values.yaml
+          #yq e -i '.containers.name.tag = strenv(IMAGE_TAG)' "${DEV_ENVIRONMENT_VALUES_FILE}"
+          yq -i '(.containers[] | select(.name == env(DEPLOYMENT_MANIFEST_SERVICE_NAME)) | .tag) = env(IMAGE_TAG)' "${DEV_ENVIRONMENT_VALUES_FILE}"
+
+          #Verify the change.
+          TAG_READ_BACK=$(yq '.containers[] | select(.name == env(DEPLOYMENT_MANIFEST_SERVICE_NAME)) | .tag' "${DEV_ENVIRONMENT_VALUES_FILE}")
+          echo "Tag read back: $TAG_READ_BACK"
+
+    #Commit and push the change to the deployment repository.
+    - name: Commit and push
+      if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
+      run: |
+        cd ${DEPLOYMENT_REPOSITORY_PATH}
+
+        git config user.name ${COMMIT_USERNAME} 
+        git config user.email ${COMMIT_EMAIL}
+
+        git add ${DEV_ENVIRONMENT_VALUES_FILE};
+        git add ${DEV_ENVIRONMENT_DESTINATION_FILE};
+        git commit -m "Pipeline (helm): replaced the image tag with ${IMAGE_TAG} and the .env file" || echo "No changes to commit"
+
+        git push
+
+  # deploy:
+  #   runs-on: ubuntu-latest
+  #   needs: build
+
+  #   steps:
+  #     - name: Deploy on EC2 via SSH
+  #       uses: appleboy/ssh-action@master
+  #       with:
+  #         host: ${{ secrets.EC2_HOST }}
+  #         username: ${{ secrets.EC2_USERNAME }}
+  #         key: ${{ secrets.EC2_KEY }}
+  #         protocol: tcp
+  #         port: 22
+  #         script: |
+  #           echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
+  #           docker pull ${{ secrets.DOCKERHUB_USERNAME }}/private:gh-action-app
+  #           docker stop node-app || true
+  #           docker rm node-app || true
+  #           docker run -d --name node-app -p 3000:3000 ${{ secrets.DOCKERHUB_USERNAME }}/private:gh-action-app
