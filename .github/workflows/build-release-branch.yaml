@@ -222,14 +222,19 @@ jobs:
       run: |
         echo "Branch name: ${BRANCH_NAME}"
 
+        ls -la
+
         git merge --no-commit --no-ff ${BRANCH_NAME} || true
         git checkout --ours ${VERSION_FILE}
         git add ${VERSION_FILE}
+
+        ls -la
 
         git status
 
         git commit --allow-empty -m "Pipeline (merged release into develop): merged ${BRANCH_NAME} into ${PARENT_BRANCH} and incremented the rc tag to ${INCREMENTED_VERSION}"
         git push origin ${PARENT_BRANCH}
+        
 
     #   #Create a pull request.
     # - name: Create pull request
