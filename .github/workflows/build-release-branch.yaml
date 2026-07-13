@@ -233,18 +233,18 @@ jobs:
         
 
       #Create a pull request.
-    # - name: Create pull request
-    #   uses: peter-evans/create-pull-request@v6
-    #   with:
-    #     #token: ${{ secrets.GITHUB_TOKEN }}
-    #     commit-message: "Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}"
-    #     title: "Pipeline (release): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}"
-    #     body: "Pipeline (release): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} from ${{ env.BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
-    #     branch: ${{ env.BRANCH_NAME }}
-    #     base: ${{ env.PRODUCTION_BRANCH }}    #Destination branch for the pull request.
-    #     reviewers: ${{ env.PR_REVIEWERS }}
-    #     assignees: ${{ env.PR_ASSIGNEES }}
-    #     labels: ${{ env.PR_LABELS }}
+    - name: Create pull request
+      uses: peter-evans/create-pull-request@v6
+      with:
+        #token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}"
+        title: "Pipeline (release): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}"
+        body: "Pipeline (release): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} from ${{ env.BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
+        branch: ${{ env.BRANCH_NAME }}
+        base: ${{ env.PRODUCTION_BRANCH }}    #Destination branch for the pull request.
+        reviewers: ${{ env.PR_REVIEWERS }}
+        assignees: ${{ env.PR_ASSIGNEES }}
+        labels: ${{ env.PR_LABELS }}
 
     #Deployment. The .env file must be copied to the deployment repository regardless whether the file is deployed or not. But why though??
     #It is better not to copy since a change would trigger a deployment even if the image tag is not changed. So, only copy the .env file if the deploy option is selected.
