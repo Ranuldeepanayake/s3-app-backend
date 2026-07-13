@@ -7,9 +7,9 @@ name: Build release branch
 
 #Trigger the workflow on-push and manually.
 on:
-  push:
-    branches: 
-    - "release/**"
+  # push:
+  #   branches: 
+  #   - "release/**"
   workflow_dispatch:
     inputs:
       #Input to select the action.
@@ -61,11 +61,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        with:
-        #token: ${{ secrets.DEPLOYMENT_REPOSITORY_TOKEN }}
-        ssh-key: ${{ secrets.DEPLOYMENT_REPOSITORY_SSH_PRIVATE_KEY }}
-        #Cleans the workspace before checking out code.
-        clean: true
+        clean: true      #Cleans the workspace before checking out code.
         fetch-depth: 0   #Required to push back
 
       #Ensure jq is available. 
@@ -219,32 +215,40 @@ jobs:
       run: |
         git checkout ${PARENT_BRANCH}
         echo "Selected branch: $(git branch)"
+        echo "Original branch name: ${BRANCH_NAME}"
 
     #Merge the release branch into the develop branch except for the version file, commit and push.
     - name: Merge release into develop
       run: |
         echo "Branch name: ${BRANCH_NAME}"
 
+        ls -la
+
         git merge --no-commit --no-ff ${BRANCH_NAME} || true
         git checkout --ours ${VERSION_FILE}
         git add ${VERSION_FILE}
 
-        git commit --allow-empty -m "Pipeline (merged develop with release): merged ${PARENT_BRANCH} with ${BRANCH_NAME} and incremeted the rc tag to ${INCREMENTED_VERSION}"
-        git push origin ${PARENT_BRANCH}
+        ls -la
 
-      #Create a pull request.
-    - name: Create pull request
-      uses: peter-evans/create-pull-request@v6
-      with:
-        #token: ${{ secrets.GITHUB_TOKEN }}
-        commit-message: "Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}"
-        title: "Pipeline (release): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}"
-        body: "Pipeline (release): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} from ${{ env.BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
-        branch: ${{ env.BRANCH_NAME }}
-        base: ${{ env.PRODUCTION_BRANCH }}    #Destination branch for the pull request.
-        reviewers: ${{ env.PR_REVIEWERS }}
-        assignees: ${{ env.PR_ASSIGNEES }}
-        labels: ${{ env.PR_LABELS }}
+        git status
+
+        git commit --allow-empty -m "Pipeline (merged release into develop): merged ${BRANCH_NAME} into ${PARENT_BRANCH} and incremented the rc tag to ${INCREMENTED_VERSION}"
+        git push origin ${PARENT_BRANCH}
+        
+
+    #   #Create a pull request.
+    # - name: Create pull request
+    #   uses: peter-evans/create-pull-request@v6
+    #   with:
+    #     #token: ${{ secrets.GITHUB_TOKEN }}
+    #     commit-message: "Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}"
+    #     title: "Pipeline (release): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}"
+    #     body: "Pipeline (release): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} from ${{ env.BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
+    #     branch: ${{ env.BRANCH_NAME }}
+    #     base: ${{ env.PRODUCTION_BRANCH }}    #Destination branch for the pull request.
+    #     reviewers: ${{ env.PR_REVIEWERS }}
+    #     assignees: ${{ env.PR_ASSIGNEES }}
+    #     labels: ${{ env.PR_LABELS }}
 
     #Deployment. The .env file must be copied to the deployment repository regardless whether the file is deployed or not. But why though??
     #It is better not to copy since a change would trigger a deployment even if the image tag is not changed. So, only copy the .env file if the deploy option is selected.
