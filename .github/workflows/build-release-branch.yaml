@@ -228,8 +228,8 @@ jobs:
 
         git status
 
-        # git commit --allow-empty -m "Pipeline (merged develop with release): merged ${PARENT_BRANCH} with ${BRANCH_NAME} and incremeted the rc tag to ${INCREMENTED_VERSION}"
-        # git push origin ${PARENT_BRANCH}
+        git commit --allow-empty -m "Pipeline (merged release into develop): merged ${BRANCH_NAME} into ${PARENT_BRANCH} and incremented the rc tag to ${INCREMENTED_VERSION}"
+        git push origin ${PARENT_BRANCH}
 
     #   #Create a pull request.
     # - name: Create pull request
