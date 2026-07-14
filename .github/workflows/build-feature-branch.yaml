@@ -66,15 +66,18 @@ jobs:
     - name: Install jq 
       run: sudo apt update && sudo apt install -y jq
 
-      #Branch name validation. Skip if building a pull request since the branch name is not available in that case.
-    - name: Validate branch name
-      if: github.event_name != 'pull_request'
+      #Get the branch name.
+    - name: Get branch name
       run: |
         #Get the branch name. The below statement handles the change in variable used depending on push/pull.
         BRANCH_NAME="${GITHUB_REF_NAME:-${GITHUB_HEAD_REF}}"
         echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
         echo "Branch name: ${BRANCH_NAME}"
 
+      #Branch name validation. Skip if building a pull request since the branch name is not available in that case.
+    - name: Validate branch name
+      if: github.event_name != 'pull_request'
+      run: |
         #Allowed patterns.
         PATTERN="^(develop|feature/.+|bugfix/.+)$"
 
