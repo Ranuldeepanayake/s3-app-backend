@@ -1,6 +1,6 @@
 #Build a feature branch or the develop branch, upload the artifact to a repository and update the GitOps repository.
 
-name: Build feature/develop branch
+name: Build feature branch
 
 #Trigger the workflow on push, on pull requests and manually.
 on:
