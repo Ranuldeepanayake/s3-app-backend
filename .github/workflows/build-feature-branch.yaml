@@ -133,7 +133,7 @@ jobs:
         #Conditional image tagging based on the branch name.
         if [[ "${BRANCH_NAME}" == "develop" ]]; then
           IMAGE_TAG=${VERSION_NUMBER}-DEVELOP-SNAPSHOT-${BUILD_TIMESTAMP}-${DIGEST_SHA}
-        if [[ "${BRANCH_NAME}" == feature/* ]]; then
+        elif [[ "${BRANCH_NAME}" == feature/* ]]; then
           IMAGE_TAG=${VERSION_NUMBER}-FEATURE-SNAPSHOT-${BUILD_TIMESTAMP}-${DIGEST_SHA}
         elif [[ "${BRANCH_NAME}" == bugfix/* ]]; then
           IMAGE_TAG=${VERSION_NUMBER}-BUGFIX-SNAPSHOT-${BUILD_TIMESTAMP}-${DIGEST_SHA}
