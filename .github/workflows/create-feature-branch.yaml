@@ -17,8 +17,6 @@ on:
       INPUT_BRANCH_NAME:
         description: "New branch name"
         required: true
-      
-        #default: "release-1.0"
 
 #Global environment variables.
 env:
@@ -49,12 +47,11 @@ jobs:
           echo "Input branch name: ${INPUT_BRANCH_NAME}" 
 
           #Allowed patterns.
-          #PATTERN="^(feature|bugfix)\/[a-z]+-[0-9]+-[a-z0-9-]+$|^release\/[0-9]+\.[0-9]+\.[0-9]+$"
           PATTERN="([a-z0-9]+)"
 
           if [[ ! ${INPUT_BRANCH_NAME} =~ $PATTERN ]]; then
             echo "❌ Invalid branch name: ${INPUT_BRANCH_NAME}"
-            echo "Allowed formats: Lower case, upper case and numbers"
+            echo "Allowed formats: Lower/upper case alphabetical characters and numbers"
             exit 1
           else
             echo "✅ Branch name is valid"
@@ -75,9 +72,6 @@ jobs:
 
           #Read the version file.
           VERSION_NUMBER=$(jq -r '.version' ${VERSION_FILE} | tr -d '\n')
-
-          #If node is installed in the runtime environment.
-          #VERSION_NUMBER=$(node -p "require('./package.json').version") 
           
           #Append the version number variable to the array of runtime variables.
           echo "VERSION_NUMBER=$VERSION_NUMBER" >> $GITHUB_ENV
