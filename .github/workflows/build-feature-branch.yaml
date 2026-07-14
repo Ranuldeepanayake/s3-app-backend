@@ -1,4 +1,4 @@
-#Build a feature branch or the develop branch, upload the artifact to a repository and update the GitOps repository.
+#Build the develop, feature or bugfix branches, upload the artifact to a repository and update the GitOps repository.
 
 name: Build feature branch
 
