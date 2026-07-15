@@ -225,7 +225,7 @@ jobs:
           exit 1
         fi
 
-    #Change the image tag in the deployment repository.
+      #Change the image tag in the deployment repository.
     - name: Update the image tag in the deployment repository
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       uses: mikefarah/yq@v4.44.1
@@ -245,7 +245,7 @@ jobs:
             exit 1
           fi
 
-    #Commit and push changes to the deployment repository.
+      #Commit and push changes to the deployment repository.
     - name: Commit and push to the deployment repository
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       run: |

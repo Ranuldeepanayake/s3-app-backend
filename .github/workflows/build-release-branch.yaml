@@ -35,9 +35,9 @@ env:
   PRODUCTION_BRANCH: main
   COMMIT_USERNAME: github-actions
   COMMIT_EMAIL: github-actions@github.com
-  PR_REVIEWERS: ranuldeepanayake
-  PR_ASSIGNEES: ranuldeepanayake
-  PR_LABELS: ci,release
+  PR_REVIEWERS: '["ranuldeepanayake"]'
+  PR_ASSIGNEES: '["ranuldeepanayake"]'
+  PR_LABELS: '["ci", "release"]'
   DEPLOYMENT_REPOSITORY: Ranuldeepanayake/helm
   DEPLOYMENT_REPOSITORY_BRANCH: develop
   DEPLOYMENT_REPOSITORY_PATH: deployment-repo
@@ -59,7 +59,7 @@ jobs:
 
     steps:
       #Checkout the branch which is being built.
-    - name: Checkout code
+    - name: Repository checkout
       uses: actions/checkout@v4
       with:
         clean: true      #Cleans the workspace before checking out code.
@@ -68,6 +68,28 @@ jobs:
       #Ensure jq is available. 
     - name: Install jq 
       run: sudo apt update && sudo apt install -y jq
+
+      #Get the branch name.
+    - name: Get branch name
+      run: |
+        #Get the branch name. The below statement handles the change in variable used depending on push/pull.
+        BRANCH_NAME="${GITHUB_REF_NAME:-${GITHUB_HEAD_REF}}"
+        echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+        echo "Branch name: ${BRANCH_NAME}"
+
+      #Branch name validation. Skip if building a pull request since the branch name is not available in that case.
+    - name: Validate branch name
+      if: github.event_name != 'pull_request'
+      run: |
+        #Allowed patterns.
+        PATTERN="^(release/.+)$"
+
+        if [[ "${BRANCH_NAME}" =~ $PATTERN ]]; then
+          echo "✅ valid branch: ${BRANCH_NAME}"
+        else
+          echo "❌ invalid branch: ${BRANCH_NAME}"
+          exit 1
+        fi
 
       #Check if the version number is in the correct format.
     - name: Validate version number
@@ -132,17 +154,6 @@ jobs:
         echo "DIGEST_SHA=$DIGEST_SHA" >> $GITHUB_ENV
         echo "Digest (SHA): ${DIGEST_SHA}"
 
-        #Get the branch name. The below statement handles the change in variable used depending on push/pull.
-        BRANCH_NAME="${GITHUB_REF_NAME:-${GITHUB_HEAD_REF}}"
-        echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
-        echo "Branch name: ${BRANCH_NAME}"
-
-        #Additional safegaurd to make sure only release branches are built. This is a double check since the version number is already checked to be in the correct format.
-        if [[ "${BRANCH_NAME}" != release/* ]]; then
-        echo "❌ invalid branch: ${BRANCH_NAME}"
-          exit 1          
-        fi
-
         IMAGE_TAG=${INCREMENTED_VERSION}-RELEASE-SNAPSHOT-${BUILD_TIMESTAMP}-${DIGEST_SHA}
 
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
@@ -200,7 +211,7 @@ jobs:
         git config user.email ${COMMIT_EMAIL}
 
         git add ${VERSION_FILE}
-        git commit -m "Pipeline (rc tag increment): incremeted the rc tag to ${INCREMENTED_VERSION}" || echo "No changes to commit"
+        git commit -m "Pipeline (rc tag increment): incremented the rc tag to ${INCREMENTED_VERSION}" || echo "No changes to commit"
 
         #Create a git tag.
         git tag -a ${INCREMENTED_VERSION} -m "Release candidate tag ${INCREMENTED_VERSION}"
@@ -234,9 +245,10 @@ jobs:
         git commit --allow-empty -m "Pipeline (merged release into develop): merged ${BRANCH_NAME} into ${PARENT_BRANCH} and incremented the rc tag to ${INCREMENTED_VERSION}"
         git push origin ${PARENT_BRANCH}
 
+    #Create a pull request through the API. The Peter Evans' PR creator does not work for this scenario.
     - name: Create Pull Request
       env:
-        GH_TOKEN: ${{ github.token }}
+        GH_TOKEN: ${{ github.token }} #Created automatically when the pipeline runs.
       run: |
         curl -L \
           -X POST \
@@ -247,37 +259,22 @@ jobs:
             "title":"Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}",
             "head":"${{ env.BRANCH_NAME }}",
             "base":"${{ env.PRODUCTION_BRANCH }}",
-            "body":"Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} from ${{ env.BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}",
-            "reviewers":["ranuldeepanayake"],
-            "assignees":["ranuldeepanayake"],
-            "labels":["ci","release"]
+            "body":"Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} from ${{ env.BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
           }'
-        
-    #   #Create a pull request.
-    # - name: Create pull request
-    #   uses: peter-evans/create-pull-request@v8
-    #   with:
-    #     #token: ${{ secrets.GITHUB_TOKEN }}
-    #     commit-message: "Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}"
-    #     title: "Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}"
-    #     body: "Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} from ${{ env.BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
-    #     branch: "temp-pr-branch"
-    #     base: ${{ env.PRODUCTION_BRANCH }}
-    #     reviewers: ${{ env.PR_REVIEWERS }}
-    #     assignees: ${{ env.PR_ASSIGNEES }}
-    #     labels: ${{ env.PR_LABELS }}
 
-    #Deployment. The .env file must be copied to the deployment repository regardless whether the file is deployed or not. But why though??
-    #It is better not to copy since a change would trigger a deployment even if the image tag is not changed. So, only copy the .env file if the deploy option is selected.
+    ###############################################
+    #Deployment. 
+    ###############################################
+    #It is better not to copy the .env file if the deployment option has not been selected, since a change in the .env would trigger a deployment even 
+    #which would contradict the intention of the user who selected the build option only. Therefore, only copy the .env file if the buil-and-deploy option is selected.
 
     #Checkout the gitops repository.
-    - name: Checkout code
+    - name: Checkout the deployment repository
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       uses: actions/checkout@v4
       with:
         repository: ${{ env.DEPLOYMENT_REPOSITORY }}
         ref: ${{ env.DEPLOYMENT_REPOSITORY_BRANCH }}
-        #token: ${{ secrets.DEPLOYMENT_REPOSITORY_TOKEN }}
         ssh-key: ${{ secrets.DEPLOYMENT_REPOSITORY_SSH_PRIVATE_KEY }}
         path: ${{ env.DEPLOYMENT_REPOSITORY_PATH }}
         clean: true      #Cleans the workspace before checking out code.
@@ -290,8 +287,8 @@ jobs:
         git checkout ${BRANCH_NAME}
         echo "Selected branch: $(git branch)"
 
-      #Copy environment variables to the deployment repository.
-    - name: Copy the .env file
+      #Copy the .env file to the deployment repository.
+    - name: Copy the .env file to the deployment repository
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       run: |
         cp ${QA_ENVIRONMENT_SOURCE_FILE} ${DEPLOYMENT_REPOSITORY_PATH}/${QA_ENVIRONMENT_DESTINATION_FILE}
@@ -299,14 +296,14 @@ jobs:
 
         #Verify the change.
         if [[ -f "${QA_ENVIRONMENT_DESTINATION_FILE}" ]]; then
-          echo "✅ .env file exists"
+          echo "✅ .env file exists in the destination"
         else
-          echo "❌ .env file does not exist!"
+          echo "❌ .env file does not exist in the destination!"
           exit 1
         fi
 
-    #Change the image tag. Only if the deploy option is selected.
-    - name: Change the image tag
+    #Change the image tag in the deployment repository.
+    - name: Update the image tag in the deployment repository
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       uses: mikefarah/yq@v4.44.1
       with:
@@ -318,8 +315,15 @@ jobs:
           TAG_READ_BACK=$(yq '.containers[] | select(.name == env(DEPLOYMENT_MANIFEST_SERVICE_NAME)) | .tag' "${QA_ENVIRONMENT_VALUES_FILE}")
           echo "Tag read back: $TAG_READ_BACK"
 
+          if [[ "$TAG_READ_BACK" == "${IMAGE_TAG}" ]]; then
+            echo "✅ Image tag updated successfully"
+          else
+            echo "❌ Image tag update failed!"
+            exit 1
+          fi
+
     #Commit and push the change to the deployment repository.
-    - name: Commit and push
+    - name: Commit and push to the deployment repository
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       run: |
         cd ${DEPLOYMENT_REPOSITORY_PATH}

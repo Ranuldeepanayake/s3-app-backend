@@ -151,7 +151,7 @@ jobs:
           #Push the tag.
           git push origin ${RC_VERSION}
 
-      #Checkout the parent branch.
+        #Checkout the parent branch.
       - name: Checkout develop branch
         run: |
           git checkout develop
@@ -159,7 +159,7 @@ jobs:
           git pull
           echo "Selected branch: $(git branch)"
 
-      #Read and increment the version number.
+        #Read and increment the version number.
       - name: Increment the version
         run: |
           #Read the version number.
@@ -182,7 +182,7 @@ jobs:
 
           echo "Incremented version: ${INCREMENTED_VERSION}"
           
-      #Update the version file with the new value.
+        #Update the version file with the new value.
       - name: Update version file
         run: |        
           jq ".version = \"${INCREMENTED_VERSION}\"" ${VERSION_FILE} > temp.json && mv temp.json ${VERSION_FILE}
@@ -198,7 +198,7 @@ jobs:
             echo "✅ Incremented version written correctly to the version file"
           fi
 
-      #Commit and push the changes back to the develop branch.
+        #Commit and push the changes back to the develop branch.
       - name: Commit and push
         run: |
           git config user.name ${COMMIT_USERNAME} 
@@ -209,9 +209,7 @@ jobs:
 
           git push origin ${PARENT_BRANCH}
 
-      #Build.
-
-      #Prepare the image tag with the necessary appends.
+        #Prepare the image tag with the necessary appends.
       - name: Prepare image tag
         run: | 
           #Append the time stamp variable to the array of runtime variables.
@@ -259,8 +257,11 @@ jobs:
         run: |
           docker push ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG}
 
-      #Deployment. The .env file must be copied to the deployment repository regardless whether the file is deployed or not. But why though??
-      #It is better not to copy since a change would trigger a deployment even if the image tag is not changed. So, only copy the .env file if the deploy option is selected.
+      ###############################################
+      #Deployment. 
+      ###############################################
+      #It is better not to copy the .env file if the deployment option has not been selected, since a change in the .env would trigger a deployment even 
+      #which would contradict the intention of the user who selected the build option only. Therefore, only copy the .env file if the buil-and-deploy option is selected.
 
       #Checkout the gitops repository.
       - name: Checkout code
@@ -274,8 +275,8 @@ jobs:
           clean: true      #Cleans the workspace before checking out code.
           fetch-depth: 0   #Required to push back
 
-        #Copy environment variables to the deployment repository.
-      - name: Copy the .env file
+        #Copy the .env file to the deployment repository.
+      - name: Copy the .env file to the deployment repository
         if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
         run: |
           cp ${QA_ENVIRONMENT_SOURCE_FILE} ${DEPLOYMENT_REPOSITORY_PATH}/${QA_ENVIRONMENT_DESTINATION_FILE}
@@ -289,8 +290,8 @@ jobs:
             exit 1
           fi
 
-      #Change the image tag.
-      - name: Change the image tag
+        #Change the image tag in the deployment repository.
+      - name: Update the image tag in the deployment repository
         if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
         uses: mikefarah/yq@v4.44.1
         with:
@@ -309,8 +310,8 @@ jobs:
               exit 1
             fi
 
-      #Commit and push the change to the deployment repository.
-      - name: Commit and push
+        #Commit and push changes to the deployment repository.
+      - name: Commit and push to the deployment repository
         if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
         run: |
           cd ${DEPLOYMENT_REPOSITORY_PATH}
