@@ -1,7 +1,11 @@
 #Create a new release branch from the develop branch and increment the version number of the develop branch.
+#Pull the develop branch, create a release branch with the release candidate tag, append the release candidate tag to the version file,
+#create a git tag out of the new branch, push the release branch to remote, checkout back to develop, increment the version file, push back to remote, 
+#build the release branch, upload the artifact to the artifact repository and deploy the release branch.
 
 name: Create release branch
 
+#Trigger the workflow manually.
 on:
   workflow_dispatch:
     inputs:
@@ -10,7 +14,6 @@ on:
         description: 'Select action'
         required: true
         default: build-and-deploy
-        # GitHub doesn't have native radio buttons; use allowed values
         type: choice
         options:
           - build
@@ -41,6 +44,7 @@ env:
   COMMIT_USERNAME: github-actions
   COMMIT_EMAIL: github-actions@github.com
   DEPLOYMENT_REPOSITORY: Ranuldeepanayake/helm
+  DEPLOYMENT_REPOSITORY_BRANCH: develop
   DEPLOYMENT_REPOSITORY_PATH: deployment-repo
   QA_ENVIRONMENT_SOURCE_FILE: env/env-qa
   QA_ENVIRONMENT_DESTINATION_FILE: environments/s3-app/qa/backend-env.yaml
@@ -51,7 +55,6 @@ env:
 permissions:
   contents: write
 
-#A job has a sequential list of steps. Several jobs can be run in parallel or chained.
 jobs:
   create-release-branch:
 
@@ -60,7 +63,7 @@ jobs:
 
     steps:
         #Checkout the parent branch specifically since we are creating the new one from it.
-      - name: Checkout code
+      - name: Repository checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ env.PARENT_BRANCH }}
@@ -94,13 +97,8 @@ jobs:
             echo "✅ Version number ${VERSION_NUMBER} is consistent with the format"
           fi
 
-        ##Pull the develop branch, create a release branch with the release candidate tag, append the release candidate tag to the version file,
-        ##create a git tag out of the new branch, push the release branch to remote, checkout back from develop, increment the version file, push back to remote, 
-        ##build the release branch, deploy the release branch.
-
         #Prepare the new branch name with the necessary appends.
       - name: Prepare release branch name
-        id: meta
         run: | 
           #Append the necessary components.
           NEW_BRANCH_NAME="release/${VERSION_NUMBER}"
@@ -115,11 +113,6 @@ jobs:
         #Append the release candidate tag to the version file of the new branch.
       - name: Append release candidate tag
         run: |
-          #BASE_VERSION=$(jq -r '.version' package.json | sed 's/-rc\..*//')
-          #RC_NUMBER=${{ github.run_number }}
-          #RC_VERSION="${BASE_VERSION}-rc.${RC_NUMBER}"
-          #jq ".version = \"${RC_VERSION}\"" package.json > tmp.json && mv tmp.json package.json
-
           RC_VERSION="${VERSION_NUMBER}-rc.${RC_TAG}"
           echo "RC_VERSION=$RC_VERSION" >> $GITHUB_ENV
           echo "Prepared release candidate version: ${RC_VERSION}"
@@ -192,7 +185,6 @@ jobs:
       #Update the version file with the new value.
       - name: Update version file
         run: |        
-          #jq ".version = \"${{ steps.bump.outputs.new }}\"" package.json > tmp.json
           jq ".version = \"${INCREMENTED_VERSION}\"" ${VERSION_FILE} > temp.json && mv temp.json ${VERSION_FILE}
 
           INCREMENTED_VERSION_READ_BACK=$(jq -r '.version' ${VERSION_FILE} | tr -d '\n')
@@ -276,7 +268,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ env.DEPLOYMENT_REPOSITORY }}
-          #token: ${{ secrets.DEPLOYMENT_REPOSITORY_TOKEN }}
+          ref: ${{ env.DEPLOYMENT_REPOSITORY_BRANCH }}
           ssh-key: ${{ secrets.DEPLOYMENT_REPOSITORY_SSH_PRIVATE_KEY }}
           path: ${{ env.DEPLOYMENT_REPOSITORY_PATH }}
           clean: true      #Cleans the workspace before checking out code.
@@ -291,13 +283,13 @@ jobs:
 
           #Verify the change.
           if [[ -f "${QA_ENVIRONMENT_DESTINATION_FILE}" ]]; then
-            echo "✅ .env file exists"
+            echo "✅ .env file exists in the destination"
           else
-            echo "❌ .env file does not exist!"
+            echo "❌ .env file does not exist in the destination!"
             exit 1
           fi
 
-      #Change the image tag. Only if the deploy option is selected.
+      #Change the image tag.
       - name: Change the image tag
         if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
         uses: mikefarah/yq@v4.44.1
@@ -309,6 +301,13 @@ jobs:
             #Verify the change.
             TAG_READ_BACK=$(yq '.containers[] | select(.name == env(DEPLOYMENT_MANIFEST_SERVICE_NAME)) | .tag' "${QA_ENVIRONMENT_VALUES_FILE}")
             echo "Tag read back: $TAG_READ_BACK"
+
+            if [[ "$TAG_READ_BACK" == "${IMAGE_TAG}" ]]; then
+            echo "✅ Image tag updated successfully"
+            else
+              echo "❌ Image tag update failed!"
+              exit 1
+            fi
 
       #Commit and push the change to the deployment repository.
       - name: Commit and push
