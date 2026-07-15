@@ -21,7 +21,8 @@ permissions:
   contents: write
 
 jobs:
-  merge-release-into-prod:
+  #Remove the rc tag from the main branch.
+  remove-rc-tag-from-main:
     if: >
       github.event_name == 'pull_request' &&
       startsWith(github.event.pull_request.head.ref, 'release/') &&
