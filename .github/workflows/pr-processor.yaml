@@ -35,6 +35,7 @@ jobs:
       #Log information about the trigger. 
     - name: Show trigger information
       run: |
+        echo "Pipeline was triggered by a PR"
         echo "PR head (source) branch: ${{ github.event.pull_request.head.ref }}"
         echo "PR base (destination) branch: ${{ github.event.pull_request.base.ref }}"
         echo "PR merge status: ${{ github.event.pull_request.merged }}"
