@@ -1,6 +1,6 @@
 #Remove the rc tag from main and develop branches after pull requests have been closed and merged.
 
-name: pr-processor
+name: PR-processor
 
 #Trigger the workflow on closed pull requests.
 on:
