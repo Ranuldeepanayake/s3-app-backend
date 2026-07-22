@@ -10,9 +10,9 @@ name: Build hotfix branch
 
 #Trigger the workflow on-push and manually.
 on:
-  push:
-    branches: 
-    - "hotfix/**"
+  # push:
+  #   branches: 
+  #   - "hotfix/**"
   workflow_dispatch:
     inputs:
       #Input to select the action.
@@ -40,8 +40,9 @@ env:
   COMMIT_EMAIL: github-actions@github.com
   PR_REVIEWERS: ranuldeepanayake
   PR_ASSIGNEES: ranuldeepanayake
-  PR_LABELS: ci,hotfix
+  PR_LABELS: ci, hotfix
   DEPLOYMENT_REPOSITORY: Ranuldeepanayake/helm
+  DEPLOYMENT_REPOSITORY_BRANCH: develop
   DEPLOYMENT_REPOSITORY_PATH: deployment-repo
   QA_ENVIRONMENT_SOURCE_FILE: env/env-qa
   QA_ENVIRONMENT_DESTINATION_FILE: environments/s3-app/qa/backend-env.yaml
@@ -61,19 +62,37 @@ jobs:
 
     steps:
       #Checkout the branch which is being built.
-    - name: Checkout code
+    - name: Repository checkout
       uses: actions/checkout@v4
       with:
-        with:
-        #token: ${{ secrets.DEPLOYMENT_REPOSITORY_TOKEN }}
-        ssh-key: ${{ secrets.DEPLOYMENT_REPOSITORY_SSH_PRIVATE_KEY }}
-        #Cleans the workspace before checking out code.
-        clean: true
+        clean: true      #Cleans the workspace before checking out code.
         fetch-depth: 0   #Required to push back
 
       #Ensure jq is available. 
     - name: Install jq 
       run: sudo apt update && sudo apt install -y jq
+
+      #Get the branch name.
+    - name: Get branch name
+      run: |
+        #Get the branch name. The below statement handles the change in variable used depending on push/pull.
+        BRANCH_NAME="${GITHUB_REF_NAME:-${GITHUB_HEAD_REF}}"
+        echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+        echo "Branch name: ${BRANCH_NAME}"
+
+      #Branch name validation. Skip if building a pull request since the branch name is not available in that case.
+    - name: Validate branch name
+      if: github.event_name != 'pull_request'
+      run: |
+        #Allowed patterns.
+        PATTERN="^(hotfix/.+)$"
+
+        if [[ "${BRANCH_NAME}" =~ $PATTERN ]]; then
+          echo "✅ valid branch: ${BRANCH_NAME}"
+        else
+          echo "❌ invalid branch: ${BRANCH_NAME}"
+          exit 1
+        fi
 
       #Check if the version number is in the correct format.
     - name: Validate version number
@@ -98,7 +117,7 @@ jobs:
           echo "✅ Version number ${VERSION_NUMBER} is consistent with the format"
         fi
 
-    #Read and increment the rc number.
+      #Read and increment the rc number.
     - name: Increment the rc number
       run: |
         #Read the version number.
@@ -125,24 +144,7 @@ jobs:
           echo "✅ Version number ${INCREMENTED_VERSION} is consistent with the format"
         fi
 
-    #Read and increment the version number.
-    - name: Increment the version
-      run: |
-        #Read the version number.
-        VERSION_MAJOR=$(echo ${VERSION_NUMBER} | awk -F '.' '{print $1}' | tr -d '\n')
-        VERSION_MINOR=$(echo ${VERSION_NUMBER} | awk -F '.' '{print $2}' | tr -d '\n')
-        VERSION_PATCH=$(echo ${VERSION_NUMBER} | awk -F '.' '{print $3}' | tr -d '\n')
-
-        echo "Version major: $VERSION_MAJOR"
-        echo "Version minor: $VERSION_MINOR"
-        echo "Version patch: $VERSION_PATCH"
-
-        #Increment the patch version.
-        VERSION_NUMBER="$VERSION_MAJOR.$VERSION_MINOR.$((VERSION_PATCH + 1))"
-        echo "VERSION_NUMBER=$VERSION_NUMBER" >> $GITHUB_ENV
-        echo "Incremented version number: ${VERSION_NUMBER}"
-
-     #Prepare the image tag with the necessary appends.
+      #Prepare the image tag with the necessary appends.
     - name: Prepare image tag
       run: | 
         #Append the time stamp variable to the array of runtime variables.
@@ -160,12 +162,6 @@ jobs:
         echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
         echo "Branch name: ${BRANCH_NAME}"
 
-        #Safegaurd to make sure only hotfix branches are built.
-        if [[ "${BRANCH_NAME}" != hotfix/* ]]; then
-        echo "❌ invalid branch: ${BRANCH_NAME}"
-          exit 1          
-        fi
-
         IMAGE_TAG=${INCREMENTED_VERSION}-HOTFIX-SNAPSHOT-${BUILD_TIMESTAMP}-${DIGEST_SHA}
 
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
@@ -179,7 +175,7 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}
 
-     #Log in to the artifact repository (private).
+      #Log in to the artifact repository (private).
     - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
@@ -200,7 +196,7 @@ jobs:
       run: |
         docker push ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG}
 
-    #Update the version file with the new value.
+      #Update the version file with the new value.
     - name: Update version file
       run: |        
         jq ".version = \"${INCREMENTED_VERSION}\"" ${VERSION_FILE} > temp.json && mv temp.json ${VERSION_FILE}
@@ -216,7 +212,7 @@ jobs:
           echo "✅ Incremented version written correctly to the version file"
         fi
 
-    #Commit and push the changes to the hotfix branch.
+      #Commit and push the changes to the hotfix branch.
     - name: Commit and push to hotfix
       run: |
         git config user.name ${COMMIT_USERNAME} 
@@ -262,16 +258,19 @@ jobs:
         assignees: ${{ env.PR_ASSIGNEES }}
         labels: ${{ env.PR_LABELS }}
 
-    #Deployment. The .env file must be copied to the deployment repository regardless whether the file is deployed or not. But why though??
-    #It is better not to copy since a change would trigger a deployment even if the image tag is not changed. So, only copy the .env file if the deploy option is selected.
+    ###############################################
+    #Deployment. 
+    ###############################################
+    #It is better not to copy the .env file if the deployment option has not been selected, since a change in the .env would trigger a deployment even 
+    #which would contradict the intention of the user who selected the build option only. Therefore, only copy the .env file if the buil-and-deploy option is selected.
 
-    #Checkout the gitops repository.
+      #Checkout the gitops repository.
     - name: Checkout code
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       uses: actions/checkout@v4
       with:
         repository: ${{ env.DEPLOYMENT_REPOSITORY }}
-        #token: ${{ secrets.DEPLOYMENT_REPOSITORY_TOKEN }}
+        ref: ${{ env.DEPLOYMENT_REPOSITORY_BRANCH }}
         ssh-key: ${{ secrets.DEPLOYMENT_REPOSITORY_SSH_PRIVATE_KEY }}
         path: ${{ env.DEPLOYMENT_REPOSITORY_PATH }}
         clean: true      #Cleans the workspace before checking out code.
@@ -284,8 +283,8 @@ jobs:
         git checkout ${BRANCH_NAME}
         echo "Selected branch: $(git branch)"
 
-      #Copy environment variables to the deployment repository.
-    - name: Copy the .env file
+      #Copy the .env file to the deployment repository.
+    - name: Copy the .env file to the deployment repository
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       run: |
         cp ${QA_ENVIRONMENT_SOURCE_FILE} ${DEPLOYMENT_REPOSITORY_PATH}/${QA_ENVIRONMENT_DESTINATION_FILE}
@@ -293,14 +292,14 @@ jobs:
 
         #Verify the change.
         if [[ -f "${QA_ENVIRONMENT_DESTINATION_FILE}" ]]; then
-          echo "✅ .env file exists"
+          echo "✅ .env file exists in the destination"
         else
-          echo "❌ .env file does not exist!"
+          echo "❌ .env file does not exist in the destination!"
           exit 1
         fi
 
-    #Change the image tag. Only if the deploy option is selected.
-    - name: Change the image tag
+      #Change the image tag in the deployment repository.
+    - name: Update the image tag in the deployment repository
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       uses: mikefarah/yq@v4.44.1
       with:
@@ -312,8 +311,15 @@ jobs:
           TAG_READ_BACK=$(yq '.containers[] | select(.name == env(DEPLOYMENT_MANIFEST_SERVICE_NAME)) | .tag' "${QA_ENVIRONMENT_VALUES_FILE}")
           echo "Tag read back: $TAG_READ_BACK"
 
-    #Commit and push the change to the deployment repository.
-    - name: Commit and push
+          if [[ "$TAG_READ_BACK" == "${IMAGE_TAG}" ]]; then
+            echo "✅ Image tag updated successfully"
+          else
+            echo "❌ Image tag update failed!"
+            exit 1
+          fi
+
+      #Commit and push the change to the deployment repository.
+    - name: Commit and push to the deployment repository
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       run: |
         cd ${DEPLOYMENT_REPOSITORY_PATH}

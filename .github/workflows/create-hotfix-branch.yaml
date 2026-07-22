@@ -32,6 +32,7 @@ env:
   COMMIT_USERNAME: github-actions
   COMMIT_EMAIL: github-actions@github.com
   DEPLOYMENT_REPOSITORY: Ranuldeepanayake/helm
+  DEPLOYMENT_REPOSITORY_BRANCH: develop
   DEPLOYMENT_REPOSITORY_PATH: deployment-repo
   QA_ENVIRONMENT_SOURCE_FILE: env/env-qa
   QA_ENVIRONMENT_DESTINATION_FILE: environments/s3-app/qa/backend-env.yaml
@@ -97,6 +98,23 @@ jobs:
         run: |
           git checkout -b ${NEW_BRANCH_NAME}
 
+        #Read and increment the patch version.
+      - name: Increment the patch version
+        run: |
+          #Read the version number.
+          VERSION_MAJOR=$(echo ${VERSION_NUMBER} | awk -F '.' '{print $1}' | tr -d '\n')
+          VERSION_MINOR=$(echo ${VERSION_NUMBER} | awk -F '.' '{print $2}' | tr -d '\n')
+          VERSION_PATCH=$(echo ${VERSION_NUMBER} | awk -F '.' '{print $3}' | tr -d '\n')
+
+          echo "Version major: $VERSION_MAJOR"
+          echo "Version minor: $VERSION_MINOR"
+          echo "Version patch: $VERSION_PATCH"
+
+          #Increment the patch version.
+          VERSION_NUMBER="$VERSION_MAJOR.$VERSION_MINOR.$((VERSION_PATCH + 1))"
+          echo "VERSION_NUMBER=$VERSION_NUMBER" >> $GITHUB_ENV
+          echo "Incremented version number: ${VERSION_NUMBER}"
+
         #Append the release candidate tag to the version file of the new branch.
       - name: Append release candidate tag
         run: |
@@ -137,7 +155,7 @@ jobs:
           #Push the tag.
           git push origin ${RC_VERSION}
 
-      #Prepare the image tag with the necessary appends.
+        #Prepare the image tag with the necessary appends.
       - name: Prepare image tag
         run: | 
           #Append the time stamp variable to the array of runtime variables.
@@ -164,7 +182,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      #Log in to the artifact repository (private).
+        #Log in to the artifact repository (private).
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
@@ -192,11 +210,12 @@ jobs:
       #which would contradict the intention of the user who selected the build option only. Therefore, only copy the .env file if the buil-and-deploy option is selected.
 
       #Checkout the gitops repository.
-      - name: Checkout code
+      - name: Checkout the deployment repository
         if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
         uses: actions/checkout@v4
         with:
           repository: ${{ env.DEPLOYMENT_REPOSITORY }}
+          ref: ${{ env.DEPLOYMENT_REPOSITORY_BRANCH }}
           ssh-key: ${{ secrets.DEPLOYMENT_REPOSITORY_SSH_PRIVATE_KEY }}
           path: ${{ env.DEPLOYMENT_REPOSITORY_PATH }}
           clean: true      #Cleans the workspace before checking out code.
@@ -217,8 +236,8 @@ jobs:
             exit 1
           fi
 
-      #Change the image tag. Only if the deploy option is selected.
-      - name: Change the image tag
+        #Change the image tag in the deployment repository.
+      - name: Update the image tag in the deployment repository
         if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
         uses: mikefarah/yq@v4.44.1
         with:
@@ -237,8 +256,8 @@ jobs:
               exit 1
             fi
 
-      #Commit and push the change to the deployment repository.
-      - name: Commit and push
+        #Commit and push the change to the deployment repository.
+      - name: Commit and push to the deployment repository
         if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
         run: |
           cd ${DEPLOYMENT_REPOSITORY_PATH}
