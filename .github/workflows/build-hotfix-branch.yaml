@@ -125,6 +125,23 @@ jobs:
           echo "✅ Version number ${INCREMENTED_VERSION} is consistent with the format"
         fi
 
+    #Read and increment the version number.
+    - name: Increment the version
+      run: |
+        #Read the version number.
+        VERSION_MAJOR=$(echo ${VERSION_NUMBER} | awk -F '.' '{print $1}' | tr -d '\n')
+        VERSION_MINOR=$(echo ${VERSION_NUMBER} | awk -F '.' '{print $2}' | tr -d '\n')
+        VERSION_PATCH=$(echo ${VERSION_NUMBER} | awk -F '.' '{print $3}' | tr -d '\n')
+
+        echo "Version major: $VERSION_MAJOR"
+        echo "Version minor: $VERSION_MINOR"
+        echo "Version patch: $VERSION_PATCH"
+
+        #Increment the patch version.
+        VERSION_NUMBER="$VERSION_MAJOR.$VERSION_MINOR.$((VERSION_PATCH + 1))"
+        echo "VERSION_NUMBER=$VERSION_NUMBER" >> $GITHUB_ENV
+        echo "Incremented version number: ${VERSION_NUMBER}"
+
      #Prepare the image tag with the necessary appends.
     - name: Prepare image tag
       run: | 
