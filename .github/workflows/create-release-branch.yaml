@@ -120,7 +120,6 @@ jobs:
           #Write the new version to the version file.
           jq ".version = \"${RC_VERSION}\"" ${VERSION_FILE} > temp.json && mv temp.json ${VERSION_FILE}
 
-          #echo "Release candidate version in version file: $(jq -r '.version' ${VERSION_FILE} | tr -d '\n')
           RC_VERSION_READ_BACK=$(jq -r '.version' ${VERSION_FILE} | tr -d '\n')
           echo "Written release candidate version: $RC_VERSION_READ_BACK"
 
@@ -304,7 +303,7 @@ jobs:
             echo "Tag read back: $TAG_READ_BACK"
 
             if [[ "$TAG_READ_BACK" == "${IMAGE_TAG}" ]]; then
-            echo "✅ Image tag updated successfully"
+              echo "✅ Image tag updated successfully"
             else
               echo "❌ Image tag update failed!"
               exit 1

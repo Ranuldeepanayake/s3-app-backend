@@ -114,7 +114,7 @@ jobs:
           echo "✅ Version number ${VERSION_NUMBER} is consistent with the format"
         fi
 
-    #Read and increment the rc number.
+      #Read and increment the rc number.
     - name: Increment the rc number
       run: |
         #Read the version number.
@@ -141,7 +141,7 @@ jobs:
           echo "✅ Version number ${INCREMENTED_VERSION} is consistent with the format"
         fi
 
-     #Prepare the image tag with the necessary appends.
+      #Prepare the image tag with the necessary appends.
     - name: Prepare image tag
       run: | 
         #Append the time stamp variable to the array of runtime variables.
@@ -188,7 +188,7 @@ jobs:
       run: |
         docker push ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG}
 
-    #Update the version file with the new value.
+      #Update the version file with the new value.
     - name: Update version file
       run: |        
         jq ".version = \"${INCREMENTED_VERSION}\"" ${VERSION_FILE} > temp.json && mv temp.json ${VERSION_FILE}
@@ -204,7 +204,7 @@ jobs:
           echo "✅ Incremented version written correctly to the version file"
         fi
 
-    #Commit and push the changes to the release branch.
+      #Commit and push the changes to the release branch.
     - name: Commit and push to release
       run: |
         git config user.name ${COMMIT_USERNAME} 
@@ -222,14 +222,14 @@ jobs:
         #Push the tag.
         git push origin ${INCREMENTED_VERSION}
 
-    #Checkout the parent branch.
+      #Checkout the parent branch.
     - name: Checkout develop branch
       run: |
         git checkout ${PARENT_BRANCH}
         echo "Selected branch: $(git branch)"
         echo "Original branch name: ${BRANCH_NAME}"
 
-    #Merge the release branch into the develop branch except for the version file, commit and push.
+      #Merge the release branch into the develop branch except for the version file, commit and push.
     - name: Merge release into develop
       run: |
         echo "Branch name: ${BRANCH_NAME}"
@@ -245,7 +245,7 @@ jobs:
         git commit --allow-empty -m "Pipeline (merged release into develop): merged ${BRANCH_NAME} into ${PARENT_BRANCH} and incremented the rc tag to ${INCREMENTED_VERSION}"
         git push origin ${PARENT_BRANCH}
 
-    #Create a pull request for the production branch through the API. The Peter Evans' PR creator does not work for this scenario.
+      #Create a pull request for the production branch through the API. The Peter Evans' PR creator does not work for this scenario.
     - name: Create pull request for production
       env:
         GH_TOKEN: ${{ github.token }} #Created automatically when the pipeline runs.
@@ -268,7 +268,7 @@ jobs:
     #It is better not to copy the .env file if the deployment option has not been selected, since a change in the .env would trigger a deployment even 
     #which would contradict the intention of the user who selected the build option only. Therefore, only copy the .env file if the buil-and-deploy option is selected.
 
-    #Checkout the gitops repository.
+      #Checkout the gitops repository.
     - name: Checkout the deployment repository
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       uses: actions/checkout@v4
@@ -302,7 +302,7 @@ jobs:
           exit 1
         fi
 
-    #Change the image tag in the deployment repository.
+      #Change the image tag in the deployment repository.
     - name: Update the image tag in the deployment repository
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       uses: mikefarah/yq@v4.44.1
@@ -322,7 +322,7 @@ jobs:
             exit 1
           fi
 
-    #Commit and push the change to the deployment repository.
+      #Commit and push the change to the deployment repository.
     - name: Commit and push to the deployment repository
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       run: |
