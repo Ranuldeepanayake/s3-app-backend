@@ -4,6 +4,7 @@
 
 name: Create hotfix branch
 
+#Trigger the workflow manually.
 on:
   workflow_dispatch:
     inputs:
@@ -12,7 +13,6 @@ on:
         description: 'Select action'
         required: true
         default: build-and-deploy
-        # GitHub doesn't have native radio buttons; use allowed values
         type: choice
         options:
           - build
@@ -32,6 +32,7 @@ env:
   COMMIT_USERNAME: github-actions
   COMMIT_EMAIL: github-actions@github.com
   DEPLOYMENT_REPOSITORY: Ranuldeepanayake/helm
+  DEPLOYMENT_REPOSITORY_BRANCH: develop
   DEPLOYMENT_REPOSITORY_PATH: deployment-repo
   QA_ENVIRONMENT_SOURCE_FILE: env/env-qa
   QA_ENVIRONMENT_DESTINATION_FILE: environments/s3-app/qa/backend-env.yaml
@@ -42,7 +43,6 @@ env:
 permissions:
   contents: write
 
-#A job has a sequential list of steps. Several jobs can be run in parallel or chained.
 jobs:
   create-hotfix-branch:
 
@@ -51,7 +51,7 @@ jobs:
 
     steps:
         #Checkout the parent branch specifically since we are creating the new one from it.
-      - name: Checkout code
+      - name: Repository checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ env.PARENT_BRANCH }}
@@ -85,8 +85,21 @@ jobs:
             echo "✅ Version number ${VERSION_NUMBER} is consistent with the format"
           fi
 
-        #Read and increment the version number.
-      - name: Increment the version
+        #Prepare the new branch name with the necessary appends.
+      - name: Prepare hotfix branch name
+        run: | 
+          #Append the necessary components.
+          NEW_BRANCH_NAME="hotfix/${VERSION_NUMBER}"
+          echo "NEW_BRANCH_NAME=$NEW_BRANCH_NAME" >> $GITHUB_ENV
+          echo "New branch name: ${NEW_BRANCH_NAME}"
+       
+        #Create the new branch from the parent branch.
+      - name: Create hotfix branch
+        run: |
+          git checkout -b ${NEW_BRANCH_NAME}
+
+        #Read and increment the patch version.
+      - name: Increment the patch version
         run: |
           #Read the version number.
           VERSION_MAJOR=$(echo ${VERSION_NUMBER} | awk -F '.' '{print $1}' | tr -d '\n')
@@ -102,20 +115,6 @@ jobs:
           echo "VERSION_NUMBER=$VERSION_NUMBER" >> $GITHUB_ENV
           echo "Incremented version number: ${VERSION_NUMBER}"
 
-        #Prepare the new branch name with the necessary appends.
-      - name: Prepare release branch name
-        id: meta
-        run: | 
-          #Append the necessary components.
-          NEW_BRANCH_NAME="hotfix/${VERSION_NUMBER}"
-          echo "NEW_BRANCH_NAME=$NEW_BRANCH_NAME" >> $GITHUB_ENV
-          echo "New branch name: ${NEW_BRANCH_NAME}"
-       
-        #Create the new branch from the parent branch.
-      - name: Create hotfix branch
-        run: |
-          git checkout -b ${NEW_BRANCH_NAME}
-
         #Append the release candidate tag to the version file of the new branch.
       - name: Append release candidate tag
         run: |
@@ -126,7 +125,6 @@ jobs:
           #Write the new version to the version file.
           jq ".version = \"${RC_VERSION}\"" ${VERSION_FILE} > temp.json && mv temp.json ${VERSION_FILE}
 
-          #echo "Release candidate version in version file: $(jq -r '.version' ${VERSION_FILE} | tr -d '\n')
           RC_VERSION_READ_BACK=$(jq -r '.version' ${VERSION_FILE} | tr -d '\n')
           echo "Written release candidate version: $RC_VERSION_READ_BACK"
 
@@ -157,9 +155,7 @@ jobs:
           #Push the tag.
           git push origin ${RC_VERSION}
 
-      #Build.
-
-      #Prepare the image tag with the necessary appends.
+        #Prepare the image tag with the necessary appends.
       - name: Prepare image tag
         run: | 
           #Append the time stamp variable to the array of runtime variables.
@@ -186,7 +182,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      #Log in to the artifact repository (private).
+        #Log in to the artifact repository (private).
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
@@ -207,23 +203,26 @@ jobs:
         run: |
           docker push ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG}
 
-      #Deployment. The .env file must be copied to the deployment repository regardless whether the file is deployed or not. But why though??
-      #It is better not to copy since a change would trigger a deployment even if the image tag is not changed. So, only copy the .env file if the deploy option is selected.
+      ###############################################
+      #Deployment. 
+      ###############################################
+      #It is better not to copy the .env file if the deployment option has not been selected, since a change in the .env would trigger a deployment even 
+      #which would contradict the intention of the user who selected the build option only. Therefore, only copy the .env file if the buil-and-deploy option is selected.
 
       #Checkout the gitops repository.
-      - name: Checkout code
+      - name: Checkout the deployment repository
         if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
         uses: actions/checkout@v4
         with:
           repository: ${{ env.DEPLOYMENT_REPOSITORY }}
-          #token: ${{ secrets.DEPLOYMENT_REPOSITORY_TOKEN }}
+          ref: ${{ env.DEPLOYMENT_REPOSITORY_BRANCH }}
           ssh-key: ${{ secrets.DEPLOYMENT_REPOSITORY_SSH_PRIVATE_KEY }}
           path: ${{ env.DEPLOYMENT_REPOSITORY_PATH }}
           clean: true      #Cleans the workspace before checking out code.
           fetch-depth: 0   #Required to push back
 
-        #Copy environment variables to the deployment repository.
-      - name: Copy the .env file
+        #Copy the .env file to the deployment repository.
+      - name: Copy the .env file to the deployment repository
         if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
         run: |
           cp ${QA_ENVIRONMENT_SOURCE_FILE} ${DEPLOYMENT_REPOSITORY_PATH}/${QA_ENVIRONMENT_DESTINATION_FILE}
@@ -231,14 +230,14 @@ jobs:
 
           #Verify the change.
           if [[ -f "${QA_ENVIRONMENT_DESTINATION_FILE}" ]]; then
-            echo "✅ .env file exists"
+            echo "✅ .env file exists in the destination"
           else
-            echo "❌ .env file does not exist!"
+            echo "❌ .env file does not exist in the destination!"
             exit 1
           fi
 
-      #Change the image tag. Only if the deploy option is selected.
-      - name: Change the image tag
+        #Change the image tag in the deployment repository.
+      - name: Update the image tag in the deployment repository
         if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
         uses: mikefarah/yq@v4.44.1
         with:
@@ -250,8 +249,15 @@ jobs:
             TAG_READ_BACK=$(yq '.containers[] | select(.name == env(DEPLOYMENT_MANIFEST_SERVICE_NAME)) | .tag' "${QA_ENVIRONMENT_VALUES_FILE}")
             echo "Tag read back: $TAG_READ_BACK"
 
-      #Commit and push the change to the deployment repository.
-      - name: Commit and push
+            if [[ "$TAG_READ_BACK" == "${IMAGE_TAG}" ]]; then
+              echo "✅ Image tag updated successfully"
+            else
+              echo "❌ Image tag update failed!"
+              exit 1
+            fi
+
+        #Commit and push the change to the deployment repository.
+      - name: Commit and push to the deployment repository
         if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
         run: |
           cd ${DEPLOYMENT_REPOSITORY_PATH}
