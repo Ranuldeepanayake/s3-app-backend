@@ -271,7 +271,7 @@ jobs:
     #which would contradict the intention of the user who selected the build option only. Therefore, only copy the .env file if the buil-and-deploy option is selected.
 
       #Checkout the gitops repository.
-    - name: Checkout code
+    - name: Checkout the deployment repository
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       uses: actions/checkout@v4
       with:
@@ -282,8 +282,8 @@ jobs:
         clean: true      #Cleans the workspace before checking out code.
         fetch-depth: 0   #Required to push back
 
-      #Checkout the release branch again to get the .env file.
-    - name: Checkout release branch
+      #Checkout the hotfix branch again to get the .env file.
+    - name: Checkout hotfix branch
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       run: |
         git checkout ${BRANCH_NAME}
