@@ -30,8 +30,8 @@ permissions:
 jobs:
   deploy-to-production:
 
-    #Runner label.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  #Runner label.
+    timeout-minutes: 30     #Timeout against runaway jobs.
 
     steps:
       #Checkout the branch which is being built.
