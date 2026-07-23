@@ -13,9 +13,10 @@ on:
         type: choice
         options:
           - DEVELOP
-          - RELEASE
           - FEATURE
           - BUGFIX
+          - RELEASE
+          - HOTFIX
           - PRODUCTION
 
 #Global environment variables.
