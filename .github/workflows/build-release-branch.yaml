@@ -54,8 +54,8 @@ permissions:
 jobs:
   build-release-branch:
 
-    #Runner label.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  #Runner label.
+    timeout-minutes: 30     #Timeout against runaway jobs.
 
     steps:
       #Checkout the branch which is being built.
@@ -119,9 +119,10 @@ jobs:
       run: |
         #Read the version number.
         VERSION_NUMBER_FIRST_SEGMENT=$(echo ${VERSION_NUMBER} | awk -F '-rc.' '{print $1}' | tr -d '\n')
-        RC_TAG=$(echo ${VERSION_NUMBER} | awk -F '-rc.' '{print $2}' | tr -d '\n')
+        echo "VERSION_NUMBER_FIRST_SEGMENT=$VERSION_NUMBER_FIRST_SEGMENT" >> $GITHUB_ENV
+        echo "Version number first segment: ${VERSION_NUMBER_FIRST_SEGMENT}"
 
-        echo "Version number first segment: $VERSION_NUMBER_FIRST_SEGMENT"
+        RC_TAG=$(echo ${VERSION_NUMBER} | awk -F '-rc.' '{print $2}' | tr -d '\n')
         echo "RC tag: $RC_TAG"
 
         #Increment the rc tag.
@@ -256,10 +257,10 @@ jobs:
           -H "Authorization: Bearer $GH_TOKEN" \
           https://api.github.com/repos/${{ github.repository }}/pulls \
           -d '{
-            "title":"Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}",
+            "title":"Pipeline (release): Merge release changes of ${{ env.VERSION_NUMBER_FIRST_SEGMENT }} into ${{ env.PRODUCTION_BRANCH }}",
             "head":"${{ env.BRANCH_NAME }}",
             "base":"${{ env.PRODUCTION_BRANCH }}",
-            "body":"Pipeline (release): Merge release changes of ${{ env.INCREMENTED_VERSION }} from ${{ env.BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
+            "body":"Pipeline (release): Merge release changes of ${{ env.VERSION_NUMBER_FIRST_SEGMENT }} from ${{ env.BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
           }'
 
     ###############################################

@@ -57,8 +57,8 @@ permissions:
 jobs:
   build-hotfix-branch:
 
-    #Runner label.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  #Runner label.
+    timeout-minutes: 30     #Timeout against runaway jobs.
 
     steps:
       #Checkout the branch which is being built.
@@ -122,9 +122,10 @@ jobs:
       run: |
         #Read the version number.
         VERSION_NUMBER_FIRST_SEGMENT=$(echo ${VERSION_NUMBER} | awk -F '-rc.' '{print $1}' | tr -d '\n')
-        RC_TAG=$(echo ${VERSION_NUMBER} | awk -F '-rc.' '{print $2}' | tr -d '\n')
+        echo "VERSION_NUMBER_FIRST_SEGMENT=$VERSION_NUMBER_FIRST_SEGMENT" >> $GITHUB_ENV
+        echo "Version number first segment: ${VERSION_NUMBER_FIRST_SEGMENT}"
 
-        echo "Version number first segment: $VERSION_NUMBER_FIRST_SEGMENT"
+        RC_TAG=$(echo ${VERSION_NUMBER} | awk -F '-rc.' '{print $2}' | tr -d '\n')
         echo "RC tag: $RC_TAG"
 
         #Increment the rc tag.
@@ -241,10 +242,10 @@ jobs:
           -H "Authorization: Bearer $GH_TOKEN" \
           https://api.github.com/repos/${{ github.repository }}/pulls \
           -d '{
-            "title":"Pipeline (hotfix): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PARENT_BRANCH }}",
+            "title":"Pipeline (hotfix): Merge hotfix changes of ${{ env.VERSION_NUMBER_FIRST_SEGMENT }} into ${{ env.PARENT_BRANCH }}",
             "head":"${{ env.BRANCH_NAME }}",
             "base":"${{ env.PARENT_BRANCH }}",
-            "body":"Pipeline (hotfix): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} from ${{ env.BRANCH_NAME }} into ${{ env.PARENT_BRANCH }}"
+            "body":"Pipeline (hotfix): Merge hotfix changes of ${{ env.VERSION_NUMBER_FIRST_SEGMENT }} from ${{ env.BRANCH_NAME }} into ${{ env.PARENT_BRANCH }}"
           }'
 
       #Create a pull request for the production branch through the API. The Peter Evans' PR creator does not work for this scenario.
@@ -258,10 +259,10 @@ jobs:
           -H "Authorization: Bearer $GH_TOKEN" \
           https://api.github.com/repos/${{ github.repository }}/pulls \
           -d '{
-            "title":"Pipeline (hotfix): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}",
+            "title":"Pipeline (hotfix): Merge hotfix changes of ${{ env.VERSION_NUMBER_FIRST_SEGMENT }} into ${{ env.PRODUCTION_BRANCH }}",
             "head":"${{ env.BRANCH_NAME }}",
             "base":"${{ env.PRODUCTION_BRANCH }}",
-            "body":"Pipeline (hotfix): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} from ${{ env.BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
+            "body":"Pipeline (hotfix): Merge hotfix changes of ${{ env.VERSION_NUMBER_FIRST_SEGMENT }} from ${{ env.BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
           }'
 
     ###############################################
@@ -271,7 +272,7 @@ jobs:
     #which would contradict the intention of the user who selected the build option only. Therefore, only copy the .env file if the buil-and-deploy option is selected.
 
       #Checkout the gitops repository.
-    - name: Checkout code
+    - name: Checkout the deployment repository
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       uses: actions/checkout@v4
       with:
@@ -282,8 +283,8 @@ jobs:
         clean: true      #Cleans the workspace before checking out code.
         fetch-depth: 0   #Required to push back
 
-      #Checkout the release branch again to get the .env file.
-    - name: Checkout release branch
+      #Checkout the hotfix branch again to get the .env file.
+    - name: Checkout hotfix branch
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       run: |
         git checkout ${BRANCH_NAME}

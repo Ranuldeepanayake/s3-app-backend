@@ -27,10 +27,10 @@ permissions:
 
 jobs:
   tag-for-production:
-    #Runner label.
-    runs-on: ubuntu-latest
+  
+    runs-on: ubuntu-latest  #Runner label.
+    timeout-minutes: 30     #Timeout against runaway jobs.
 
-    
     steps:
         #Validate the input image tag (ex- 1.0.0-rc.8-RELEASE*, 1.0.3-rc.5-HOTFIX*). Only certain formats are allowed to avoid accidental tagging of wrong images.
       - name: Validate input image tag
