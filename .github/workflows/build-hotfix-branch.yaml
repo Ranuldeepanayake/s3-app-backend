@@ -241,10 +241,10 @@ jobs:
           -H "Authorization: Bearer $GH_TOKEN" \
           https://api.github.com/repos/${{ github.repository }}/pulls \
           -d '{
-            "title":"Pipeline (hotfix): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PARENT_BRANCH }}",
+            "title":"Pipeline (hotfix): Merge hotfix changes of ${{ env.VERSION_NUMBER }} into ${{ env.PARENT_BRANCH }}",
             "head":"${{ env.BRANCH_NAME }}",
             "base":"${{ env.PARENT_BRANCH }}",
-            "body":"Pipeline (hotfix): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} from ${{ env.BRANCH_NAME }} into ${{ env.PARENT_BRANCH }}"
+            "body":"Pipeline (hotfix): Merge hotfix changes of ${{ env.VERSION_NUMBER }} from ${{ env.BRANCH_NAME }} into ${{ env.PARENT_BRANCH }}"
           }'
 
       #Create a pull request for the production branch through the API. The Peter Evans' PR creator does not work for this scenario.
@@ -258,10 +258,10 @@ jobs:
           -H "Authorization: Bearer $GH_TOKEN" \
           https://api.github.com/repos/${{ github.repository }}/pulls \
           -d '{
-            "title":"Pipeline (hotfix): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} into ${{ env.PRODUCTION_BRANCH }}",
+            "title":"Pipeline (hotfix): Merge hotfix changes of ${{ env.VERSION_NUMBER }} into ${{ env.PRODUCTION_BRANCH }}",
             "head":"${{ env.BRANCH_NAME }}",
             "base":"${{ env.PRODUCTION_BRANCH }}",
-            "body":"Pipeline (hotfix): Merge hotfix changes of ${{ env.INCREMENTED_VERSION }} from ${{ env.BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
+            "body":"Pipeline (hotfix): Merge hotfix changes of ${{ env.VERSION_NUMBER }} from ${{ env.BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
           }'
 
     ###############################################

@@ -85,19 +85,6 @@ jobs:
             echo "✅ Version number ${VERSION_NUMBER} is consistent with the format"
           fi
 
-        #Prepare the new branch name with the necessary appends.
-      - name: Prepare hotfix branch name
-        run: | 
-          #Append the necessary components.
-          NEW_BRANCH_NAME="hotfix/${VERSION_NUMBER}"
-          echo "NEW_BRANCH_NAME=$NEW_BRANCH_NAME" >> $GITHUB_ENV
-          echo "New branch name: ${NEW_BRANCH_NAME}"
-       
-        #Create the new branch from the parent branch.
-      - name: Create hotfix branch
-        run: |
-          git checkout -b ${NEW_BRANCH_NAME}
-
         #Read and increment the patch version.
       - name: Increment the patch version
         run: |
@@ -114,6 +101,19 @@ jobs:
           VERSION_NUMBER="$VERSION_MAJOR.$VERSION_MINOR.$((VERSION_PATCH + 1))"
           echo "VERSION_NUMBER=$VERSION_NUMBER" >> $GITHUB_ENV
           echo "Incremented version number: ${VERSION_NUMBER}"
+
+        #Prepare the new branch name with the necessary appends.
+      - name: Prepare hotfix branch name
+        run: | 
+          #Append the necessary components.
+          NEW_BRANCH_NAME="hotfix/${VERSION_NUMBER}"
+          echo "NEW_BRANCH_NAME=$NEW_BRANCH_NAME" >> $GITHUB_ENV
+          echo "New branch name: ${NEW_BRANCH_NAME}"
+       
+        #Create the new branch from the parent branch.
+      - name: Create hotfix branch
+        run: |
+          git checkout -b ${NEW_BRANCH_NAME}
 
         #Append the release candidate tag to the version file of the new branch.
       - name: Append release candidate tag
