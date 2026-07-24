@@ -67,6 +67,8 @@ env:
 #Permissions.
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   build-feature-branch:
@@ -77,7 +79,7 @@ jobs:
     #Checkout the branch which is being built.
     steps:
     - name: Repository checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         clean: true      #Cleans the workspace before checking out code.
         fetch-depth: 0   #Required to push back
@@ -185,7 +187,7 @@ jobs:
 
       #Configure the artifact repository credentials.
     - name: Configure artifact repository credentials
-      uses: aws-actions/configure-aws-credentials@v4
+      uses: aws-actions/configure-aws-credentials@v5
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -221,8 +223,35 @@ jobs:
         docker run --rm  -v ./coverage:/usr/src/app/coverage \
         ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG} npm run test:coverage
 
-      #Upload coverage test results.
-    - name: Upload coverage test results
+    - name: Configure GitHub Pages
+      if: ${{ env.RUN_TESTS == 'true' }}
+      uses: actions/configure-pages@v5
+
+    - name: Upload Pages artifact
+      if: ${{ env.RUN_TESTS == 'true' }}
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: coverage/lcov-report
+
+    - name: Deploy to GitHub Pages
+      id: deploy-lcov-to-gh-pages
+      if: ${{ env.RUN_TESTS == 'true' }}
+      uses: actions/deploy-pages@v5
+
+    - name: Print coverage report URL
+      if: ${{ env.RUN_TESTS == 'true' }}
+      run: |
+        echo "Coverage report URL: "
+        echo "${{ steps.deploy-lcov-to-gh-pages.outputs.page_url }}"
+
+    - name: Add coverage report link to summary
+      run: |
+        echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "${{ steps.deploy-lcov-to-gh-pages.outputs.page_url }}" >> $GITHUB_STEP_SUMMARY
+
+      #Additionally, save the coverage test results as an archive.
+    - name: Archive coverage test results
       uses: actions/upload-artifact@v4
       if: ${{ env.RUN_TESTS == 'true' }}
       with:
@@ -252,7 +281,7 @@ jobs:
     #Checkout the gitops repository.
     - name: Checkout the deployment repository
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         repository: ${{ env.DEPLOYMENT_REPOSITORY }}
         ref: ${{ env.DEPLOYMENT_REPOSITORY_BRANCH }}
