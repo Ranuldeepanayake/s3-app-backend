@@ -207,6 +207,20 @@ jobs:
         echo "Image name: ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG}"
         docker build --build-arg RUN_TESTS=${RUN_TESTS} -t ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG} .
 
+      #Run a temporary Docker container with the built image and mount the coverage test artifacts to a directory in the runner.
+    - name: Run tests in temp container
+      if: ${{ env.RUN_TESTS == 'true' }}  #Needed since if tests are disabled, test components will not be installed in the image.
+      run: |
+        #Check as who the runner is running as. 
+        echo "User: $(whoami) - $(id)"
+
+        #Create the coverage directory to avoid being created by root.
+        mkdir -p ./coverage
+
+        #Run the container as the actions-runner user. Else, it will not be able to be cleaned up due to permission mismatches of the artifacts in the container.
+        docker run --rm  -v ./coverage:/usr/src/app/coverage \
+        ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG} npm test:coverage
+
       #Upload coverage test results.
     - name: Upload coverage test results
       uses: actions/upload-artifact@v4
@@ -216,20 +230,6 @@ jobs:
         path: coverage/
         if-no-files-found: error
 
-      #Run tests in Docker and mount the coverage test artifacts to a volume.
-    - name: Run tests in temp container for sonarqube
-      if: ${{ env.SONAR_SCAN_ENABLE == 'true' &&  env.RUN_TESTS == 'true' }}  #Needed since if tests are disabled, test components will not be installed in the image.
-      run: |
-        #Check as who the runner is running as. 
-        echo "User: $(whoami) - $(id)"
-
-        #Create the coverage directory to avoid being created by root.
-        #mkdir -p ./coverage
-
-        #Run the container as the actions-runner user. Else, it will not be able to be cleaned up due to permission mismatches of the artifacts in the container.
-        docker run --rm  -v ./coverage:/usr/src/app/coverage \
-        ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG} npm test:coverage
-      
     #   #Scan with sonarqube. The mounted coverage test artifacts will be read by sonarqube. 
     # - name: SonarQube Scan
     #   if: ${{ env.SONAR_SCAN_ENABLE == 'true' &&  env.RUN_TESTS == 'true' }}  #Needed since if tests are disabled, test components will no be installed in the image.
