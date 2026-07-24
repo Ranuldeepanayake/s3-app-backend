@@ -251,7 +251,8 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }} #Created automatically when the pipeline runs.
       run: |
-        curl -L \
+        #Create the PR and get the PR number.
+        PR_NUMBER=$(curl -s -L \
           -X POST \
           -H "Accept: application/vnd.github+json" \
           -H "Authorization: Bearer $GH_TOKEN" \
@@ -261,7 +262,37 @@ jobs:
             "head":"${{ env.BRANCH_NAME }}",
             "base":"${{ env.PRODUCTION_BRANCH }}",
             "body":"Pipeline (release): Merge release changes of ${{ env.VERSION_NUMBER_FIRST_SEGMENT }} from ${{ env.BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
-          }'
+          }' | jq -r '.number')
+
+        #Add reviewers to the PR.
+        curl -s -L \
+          -X POST \
+          -H "Accept: application/vnd.github+json" \
+          -H "Authorization: Bearer $GH_TOKEN" \
+          https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/requested_reviewers \
+          -d "{
+            \"reviewers\": ${{ env.PR_REVIEWERS }}
+          }"
+
+        #Add assignees to the PR.
+        curl -s -L \
+          -X POST \
+          -H "Accept: application/vnd.github+json" \
+          -H "Authorization: Bearer $GH_TOKEN" \
+          https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/assignees \
+          -d "{
+            \"assignees\": ${{ env.PR_ASSIGNEES }}
+          }"
+
+        #Add labels to the PR.
+        curl -s -L \
+          -X POST \
+          -H "Accept: application/vnd.github+json" \
+          -H "Authorization: Bearer $GH_TOKEN" \
+          https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/labels \
+          -d "{
+            \"labels\": ${{ env.PR_LABELS }}
+          }"
 
     ###############################################
     #Deployment. 
