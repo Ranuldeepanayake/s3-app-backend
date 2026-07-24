@@ -219,7 +219,7 @@ jobs:
 
         #Run the container as the actions-runner user. Else, it will not be able to be cleaned up due to permission mismatches of the artifacts in the container.
         docker run --rm  -v ./coverage:/usr/src/app/coverage \
-        ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG} npm test:coverage
+        ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG} npm run test:coverage
 
       #Upload coverage test results.
     - name: Upload coverage test results
