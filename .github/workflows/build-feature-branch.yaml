@@ -207,6 +207,7 @@ jobs:
         echo "Image name: ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG}"
         docker build --build-arg RUN_TESTS=${RUN_TESTS} -t ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG} .
 
+      #Upload coverage test results.
     - name: Upload coverage test results
       uses: actions/upload-artifact@v4
       if: ${{ env.RUN_TESTS == 'true' }}
@@ -215,7 +216,7 @@ jobs:
         path: coverage/
         if-no-files-found: error
 
-    #Run tests in Docker and mount the coverage test artifacts to a volume
+      #Run tests in Docker and mount the coverage test artifacts to a volume.
     - name: Run tests in temp container for sonarqube
       if: ${{ env.SONAR_SCAN_ENABLE == 'true' &&  env.RUN_TESTS == 'true' }}  #Needed since if tests are disabled, test components will not be installed in the image.
       run: |
