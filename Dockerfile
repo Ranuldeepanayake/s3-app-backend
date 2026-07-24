@@ -26,6 +26,12 @@ RUN if [ "$RUN_TESTS" = "true" ]; then \
 COPY src ./
 COPY test ./
 
+#Run tests only if enabled.
+RUN if [ "$RUN_TESTS" = "true" ]; then \
+      echo "Running tests..."; \
+      npm test; \
+    fi
+
 #Listening port metadata.
 EXPOSE 3100
 
