@@ -323,4 +323,8 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+router.createCloudFrontUrl = createCloudFrontUrl;
+router.serializeImage = serializeImage;
+router.findImageByIdentifier = findImageByIdentifier;
+
 module.exports = router;
