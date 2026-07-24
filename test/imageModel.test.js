@@ -1,7 +1,7 @@
 const { describe, it, expect } = require('@jest/globals');
 
-const Image = require('../src/models/Image');
-const imageRoutes = require('../src/routes/imageRoutes');
+const Image = require('../src/models/Image.js');
+const imageRoutes = require('../src/routes/imageRoutes.js');
 
 describe('image metadata model', () => {
   it('keeps only the fields used for fixed-domain image metadata', () => {

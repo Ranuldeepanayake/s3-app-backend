@@ -1,5 +1,5 @@
 const { describe, it, expect } = require('@jest/globals');
-const logger = require('../src/config/logger');
+const logger = require('../src/config/logger.js');
 
 describe('logger', () => {
   let originalConsoleInfo;

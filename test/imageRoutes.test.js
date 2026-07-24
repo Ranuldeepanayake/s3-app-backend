@@ -2,7 +2,7 @@ const { describe, it, expect } = require('@jest/globals');
 const fs = require('fs');
 const path = require('path');
 
-const imageRoutes = require('../src/routes/imageRoutes');
+const imageRoutes = require('../src/routes/imageRoutes.js');
 
 const tempDir = path.join(__dirname, '..', 'src', 'tmp');
 

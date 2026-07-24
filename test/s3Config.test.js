@@ -7,7 +7,7 @@ jest.mock('@aws-sdk/client-s3', () => ({
   HeadBucketCommand: jest.fn()
 }));
 
-jest.mock('../src/config/logger', () => ({
+jest.mock('../src/config/logger.js', () => ({
   error: jest.fn(),
   warn: jest.fn(),
   info: jest.fn()
@@ -23,7 +23,7 @@ describe('s3 config', () => {
     originalBucket = process.env.AWS_BUCKET_NAME;
     process.env.AWS_BUCKET_NAME = 'test-bucket';
     jest.resetModules();
-    const { s3Client, isS3Healthy: healthFn, testS3Connection: connectionFn } = require('../src/config/s3');
+    const { s3Client, isS3Healthy: healthFn, testS3Connection: connectionFn } = require('../src/config/s3.js');
     clientMock = s3Client;
     isS3Healthy = healthFn;
     testS3Connection = connectionFn;

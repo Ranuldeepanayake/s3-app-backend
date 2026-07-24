@@ -1,9 +1,9 @@
-const { describe, it, expect } = require('@jest/globals');
+const { describe, it, expect, afterEach } = require('@jest/globals');
 const mongoose = require('mongoose');
-const { isMongoHealthy } = require('../src/config/db');
-const logger = require('../src/config/logger');
+const { isMongoHealthy } = require('../src/config/db.js');
+const logger = require('../src/config/logger.js');
 
-jest.mock('../src/config/logger', () => ({
+jest.mock('../src/config/logger.js', () => ({
   warn: jest.fn(),
   info: jest.fn(),
   error: jest.fn()

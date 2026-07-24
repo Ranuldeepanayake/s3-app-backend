@@ -2,7 +2,7 @@ const { describe, it, expect, beforeAll, afterAll } = require('@jest/globals');
 const http = require('http');
 const jwt = require('jsonwebtoken');
 
-const { router, authenticateToken } = require('../src/routes/authRoutes');
+const { router, authenticateToken } = require('../src/routes/authRoutes.js');
 
 const requestJson = (server, path, options = {}) => new Promise((resolve, reject) => {
   const requestOptions = {
