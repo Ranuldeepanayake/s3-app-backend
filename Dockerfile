@@ -22,8 +22,8 @@ RUN if [ "$RUN_TESTS" = "true" ]; then \
 #Should be placed here to prevent dev dependencies from being ignored.
 ENV NODE_ENV=production
 
-COPY src ./
-COPY test ./
+COPY src ./src
+COPY test ./test
 
 #Run tests only if enabled.
 RUN if [ "$RUN_TESTS" = "true" ]; then \
