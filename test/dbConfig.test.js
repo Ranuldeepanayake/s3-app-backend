@@ -1,6 +1,6 @@
 const { describe, it, expect, afterEach } = require('@jest/globals');
 const mongoose = require('mongoose');
-const { isMongoHealthy } = require('../src/config/db.js');
+const { isMongoHealthy, clearReconnectTimers } = require('../src/config/db.js');
 const logger = require('../src/config/logger.js');
 
 jest.mock('../src/config/logger.js', () => ({
@@ -14,6 +14,7 @@ describe('db config', () => {
   const originalDb = mongoose.connection.db;
 
   afterEach(() => {
+    clearReconnectTimers();
     mongoose.connection.readyState = originalState;
     mongoose.connection.db = originalDb;
     jest.clearAllMocks();

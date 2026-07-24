@@ -3,6 +3,28 @@
 const mongoose = require('mongoose');
 const logger = require('./logger');
 
+const reconnectTimers = new Set();
+const isTestEnvironment = () => process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined;
+
+const clearReconnectTimers = () => {
+  reconnectTimers.forEach((timer) => clearTimeout(timer));
+  reconnectTimers.clear();
+};
+
+const scheduleReconnect = (delayMs = 5000) => {
+  if (isTestEnvironment()) {
+    return null;
+  }
+
+  const timer = setTimeout(() => {
+    reconnectTimers.delete(timer);
+    connectDB();
+  }, delayMs);
+
+  reconnectTimers.add(timer);
+  return timer;
+};
+
 // Uses MongoDB's ping command instead of only checking Mongoose state, because
 // the driver can be connected while the server is no longer reachable.
 const isMongoHealthy = async () => {
@@ -26,6 +48,8 @@ const connectDB = async () => {
     return;
   }
 
+  clearReconnectTimers();
+
   try {
     await mongoose.connect(process.env.MONGODB_URI, {
       serverSelectionTimeoutMS: 5000,
@@ -35,19 +59,19 @@ const connectDB = async () => {
   } catch (error) {
     logger.error('MONGO', 'MongoDB connection error', error.message);
     logger.info('MONGO', 'Retrying MongoDB connection in 5 seconds...');
-    setTimeout(() => {
-      connectDB();
-    }, 5000);
+    scheduleReconnect();
   }
 };
 
 // Reconnect after dropped connections so transient database restarts do not
 // require restarting the API process.
 mongoose.connection.on('disconnected', () => {
+  if (isTestEnvironment()) {
+    return;
+  }
+
   logger.warn('MONGO', 'MongoDB disconnected. Retrying connection...');
-  setTimeout(() => {
-    connectDB();
-  }, 5000);
+  scheduleReconnect();
 });
 
 // Handle MongoDB runtime errors.
@@ -57,3 +81,4 @@ mongoose.connection.on('error', (error) => {
 
 module.exports = connectDB;
 module.exports.isMongoHealthy = isMongoHealthy;
+module.exports.clearReconnectTimers = clearReconnectTimers;

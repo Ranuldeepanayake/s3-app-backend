@@ -1,5 +1,11 @@
 const { describe, it, expect } = require('@jest/globals');
 
+jest.mock('../src/config/logger.js', () => ({
+  warn: jest.fn(),
+  info: jest.fn(),
+  error: jest.fn()
+}));
+
 const Image = require('../src/models/Image.js');
 const imageRoutes = require('../src/routes/imageRoutes.js');
 

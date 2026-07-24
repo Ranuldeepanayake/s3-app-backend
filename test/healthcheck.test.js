@@ -1,5 +1,11 @@
 const { describe, it, expect, afterEach } = require('@jest/globals');
 
+jest.mock('../src/config/logger.js', () => ({
+  warn: jest.fn(),
+  info: jest.fn(),
+  error: jest.fn()
+}));
+
 describe('health helpers', () => {
   afterEach(() => {
     delete process.env.AWS_BUCKET_NAME;
