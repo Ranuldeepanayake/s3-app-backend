@@ -43,7 +43,7 @@ jobs:
 
           if [[ "${INPUT_IMAGE_TAG}" =~ $PATTERN_1 ]]; then
             echo "RELEASE image tag selected: ${INPUT_IMAGE_TAG}"
-          eliif [[ "${INPUT_IMAGE_TAG}" =~ $PATTERN_2 ]]; then
+          elif [[ "${INPUT_IMAGE_TAG}" =~ $PATTERN_2 ]]; then
             echo "HOTFIX image tag selected: ${INPUT_IMAGE_TAG}"
           else
             echo "❌ invalid input image tag: ${INPUT_IMAGE_TAG}"
