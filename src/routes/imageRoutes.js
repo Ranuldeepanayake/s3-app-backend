@@ -7,6 +7,7 @@ const multer = require('multer');
 const { PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { v4: uuidv4 } = require('uuid');
 
+const { createApiRateLimiter } = require('../config/rateLimit.js');
 const { s3Client } = require('../config/s3');
 const Image = require('../models/Image');
 const logger = require('../config/logger');
@@ -27,6 +28,11 @@ const buildStorageFileName = (originalName) => {
 };
 
 router.buildStorageFileName = buildStorageFileName;
+
+// Rate limiters for different image operations with varying strictness.
+const imageReadRateLimiter = createApiRateLimiter('IMAGE_READ');
+const imageWriteRateLimiter = createApiRateLimiter('IMAGE_WRITE');
+const imageDeleteRateLimiter = createApiRateLimiter('IMAGE_DELETE');
 
 // Store uploaded files in a temporary directory rather than memory. This keeps
 // memory usage predictable when several users upload images at the same time.
@@ -103,7 +109,7 @@ const findImageByIdentifier = async (identifier) => {
 
 // Upload sequence: accept the temp file, use the actual filename as the S3 key,
 // upload the bytes, delete the temp file, then save metadata for the object.
-router.post('/', upload.single('image'), async (req, res) => {
+router.post('/', imageWriteRateLimiter, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No image file provided.' });
@@ -163,7 +169,7 @@ router.post('/', upload.single('image'), async (req, res) => {
 });
 
 // List all stored images and return CloudFront render URLs.
-router.get('/', async (req, res) => {
+router.get('/', imageReadRateLimiter, async (req, res) => {
   try {
     const images = await Image.find().sort({ uploadedAt: -1 });
     const serialized = images.map((image) => serializeImage(image));
@@ -176,7 +182,7 @@ router.get('/', async (req, res) => {
 });
 
 // Get a single image by ID or imageId.
-router.get('/:id', async (req, res) => {
+router.get('/:id', imageReadRateLimiter, async (req, res) => {
   try {
     const image = await findImageByIdentifier(req.params.id);
 
@@ -195,7 +201,7 @@ router.get('/:id', async (req, res) => {
 
 // Update can rename metadata only, or replace the S3 object when a new file is
 // supplied. The old object is deleted before the new key is saved.
-router.put('/:id', upload.single('image'), async (req, res) => {
+router.put('/:id', imageWriteRateLimiter, upload.single('image'), async (req, res) => {
   try {
     const image = await findImageByIdentifier(req.params.id);
 
@@ -269,7 +275,7 @@ router.put('/:id', upload.single('image'), async (req, res) => {
 
 // Delete all images from S3 and the database. Individual S3 delete failures are
 // logged and skipped so stale/missing objects do not block database cleanup.
-router.delete('/delete-all', authenticateToken, async (req, res) => {
+router.delete('/delete-all', imageDeleteRateLimiter, authenticateToken, async (req, res) => {
   try {
     const images = await Image.find();
 
@@ -299,7 +305,7 @@ router.delete('/delete-all', authenticateToken, async (req, res) => {
 });
 
 // Delete an image from S3 and its metadata from MongoDB.
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', imageDeleteRateLimiter, async (req, res) => {
   try {
     const image = await findImageByIdentifier(req.params.id);
 

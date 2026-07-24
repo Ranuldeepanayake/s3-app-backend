@@ -29,7 +29,7 @@ COPY test ./test
 #Run tests only if enabled.
 RUN if [ "$RUN_TESTS" = "true" ]; then \
       echo "Running tests..."; \
-      npm run test; \
+      npm run test:coverage; \
     fi
 
 #Listening port metadata.
