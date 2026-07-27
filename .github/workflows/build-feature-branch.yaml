@@ -259,13 +259,13 @@ jobs:
         path: coverage/
         if-no-files-found: error
 
-    #   #Scan with sonarqube. The mounted coverage test artifacts will be read by sonarqube. 
-    # - name: SonarQube Scan
-    #   if: ${{ env.SONAR_SCAN_ENABLE == 'true' &&  env.RUN_TESTS == 'true' }}  #Needed since if tests are disabled, test components will no be installed in the image.
-    #   uses: SonarSource/sonarqube-scan-action@v6
-    #   env:
-    #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-    #     projectBaseDir: .
+      #Scan with sonarqube. The mounted coverage test artifacts will be read by sonarqube. 
+    - name: SonarQube Scan
+      if: ${{ env.SONAR_SCAN_ENABLE == 'true' &&  env.RUN_TESTS == 'true' }}  #Needed since if tests are disabled, test components will no be installed in the image.
+      uses: SonarSource/sonarqube-scan-action@v6
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        projectBaseDir: .
 
       #Push the built image to an artifact repository.
     - name: Push image to artifact repository
