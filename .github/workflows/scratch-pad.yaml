@@ -30,6 +30,23 @@ jobs:
     timeout-minutes: 30     #Timeout against runaway jobs.
 
     steps:
+    - name: Debug dump
+      run: |
+        echo "Reviewers payload:"
+        echo "{
+          \"reviewers\": ${PR_REVIEWERS}
+        }"
+
+        echo "Assignees payload:"
+        echo "{
+          \"assignees\": ${PR_ASSIGNEES}
+        }"
+
+        echo "Labels payload:"
+        echo "{
+          \"labels\": ${PR_LABELS}
+        }"
+
     - name: Pull request modifier
       env:
         GH_TOKEN: ${{ github.token }} #Created automatically when the pipeline runs.
