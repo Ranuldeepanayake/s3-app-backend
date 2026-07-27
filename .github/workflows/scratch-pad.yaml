@@ -1,6 +1,6 @@
 #Create a new feature branch from the develop branch.
 
-name: Create feature branch
+name: Change pull request
 
 on:
   #Enable the workflow to be manually triggered. The workflow must be pushed to the default branch at least once.
