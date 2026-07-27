@@ -58,7 +58,7 @@ jobs:
           -H "Authorization: Bearer $GH_TOKEN" \
           https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/requested_reviewers \
           -d "{
-            \"reviewers\": ${{ env.PR_REVIEWERS }}
+            \"reviewers\": ${PR_REVIEWERS}
           }"
 
         #Add assignees to the PR.
@@ -68,7 +68,7 @@ jobs:
           -H "Authorization: Bearer $GH_TOKEN" \
           https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/assignees \
           -d "{
-            \"assignees\": ${{ env.PR_ASSIGNEES }}
+            \"assignees\": ${PR_ASSIGNEES}
           }"
 
         #Add labels to the PR.
@@ -78,5 +78,5 @@ jobs:
           -H "Authorization: Bearer $GH_TOKEN" \
           https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/labels \
           -d "{
-            \"labels\": ${{ env.PR_LABELS }}
+            \"labels\": ${PR_LABELS}
           }"
