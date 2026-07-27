@@ -13,9 +13,9 @@ on:
 #Global environment variables.
 env:
   PR_NUMBER: ${{ github.event.inputs.INPUT_PR_NUMBER }}
-  PR_REVIEWERS: '["ranuldeepanayake"]'
-  PR_ASSIGNEES: '["ranuldeepanayake"]'
-  PR_LABELS: '["ci", "release"]'
+  PR_REVIEWERS: ${{ vars.PR_REVIEWERS }}
+  PR_ASSIGNEES: ${{ vars.PR_ASSIGNEES }}
+  PR_LABELS: ${{ vars.PR_LABELS }}
 
 #Permissions.
 permissions:
