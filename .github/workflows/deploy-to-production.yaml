@@ -36,7 +36,7 @@ jobs:
     steps:
       #Checkout the branch which is being built.
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         ref: ${{ env.PARENT_BRANCH }}
         clean: true      #Cleans the workspace before checking out code.
@@ -71,7 +71,7 @@ jobs:
       #Checkout the gitops repository.
     - name: Checkout the deployment repository
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         repository: ${{ env.DEPLOYMENT_REPOSITORY }}
         ref: ${{ env.DEPLOYMENT_REPOSITORY_BRANCH }}

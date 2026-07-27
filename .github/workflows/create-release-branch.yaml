@@ -64,7 +64,7 @@ jobs:
     steps:
         #Checkout the parent branch specifically since we are creating the new one from it.
       - name: Repository checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ env.PARENT_BRANCH }}
           clean: true      #Cleans the workspace before checking out code.
@@ -229,7 +229,7 @@ jobs:
 
         #Configure the artifact repository credentials.
       - name: Configure artifact repository credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -265,7 +265,7 @@ jobs:
       #Checkout the gitops repository.
       - name: Checkout code
         if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ env.DEPLOYMENT_REPOSITORY }}
           ref: ${{ env.DEPLOYMENT_REPOSITORY_BRANCH }}

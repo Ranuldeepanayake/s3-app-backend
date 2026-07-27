@@ -59,7 +59,7 @@ jobs:
 
         #Checkout the parent branch specifically since we are creating the new one from it.
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ env.PARENT_BRANCH }}
           clean: true      #Cleans the workspace before checking out code.

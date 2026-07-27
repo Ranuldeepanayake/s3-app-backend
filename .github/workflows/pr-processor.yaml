@@ -57,7 +57,7 @@ jobs:
 
       #Checkout the base branch.
     - name: Repository checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         ref: ${{ github.event.pull_request.base.ref }}
         clean: true      #Cleans the workspace before checking out code.
@@ -154,7 +154,7 @@ jobs:
 
       #Checkout the base branch.
     - name: Repository checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         ref: ${{ github.event.pull_request.base.ref }}
         clean: true      #Cleans the workspace before checking out code.
@@ -251,7 +251,7 @@ jobs:
 
       #Checkout the base branch.
     - name: Repository checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         ref: ${{ github.event.pull_request.base.ref }}
         clean: true      #Cleans the workspace before checking out code.
