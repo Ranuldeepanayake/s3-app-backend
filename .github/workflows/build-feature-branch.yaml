@@ -237,7 +237,7 @@ jobs:
         docker push ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG}
 
       #Template the reports to be published in github pages.
-    - name: Prepare GitHub Pages
+    - name: Prepare GitHub pages
       if: ${{ env.RUN_TESTS == 'true' }}
       run: |
         #Clean previously copied reports if they exist.
@@ -247,32 +247,43 @@ jobs:
         cp -r coverage reports/
         cp -r jmeter reports/ || true #Jmeter report not generated yet.
 
+      #Configure workflow for Github page operations.
     - name: Configure GitHub Pages
       if: ${{ env.RUN_TESTS == 'true' }}
       uses: actions/configure-pages@v5
 
-    - name: Upload Pages artifact
+      #Upload the reports directory to Github pages.
+    - name: Upload reports artifact to Github pages
       if: ${{ env.RUN_TESTS == 'true' }}
       uses: actions/upload-pages-artifact@v3
       with:
         path: reports
 
+      #Deploy the uploaded reports directory.
     - name: Deploy reports to GitHub Pages
       id: deploy-reports
       if: ${{ env.RUN_TESTS == 'true' }}
       uses: actions/deploy-pages@v5
 
-    - name: Print coverage report URL
+      #Print the reports URL (optional).
+    - name: Print reports URL
       if: ${{ env.RUN_TESTS == 'true' }}
       run: |
-        echo "Coverage report URL: "
-        echo "${{ steps.deploy-reports.outputs.page_url }}"
+        echo "Coverage report URL: ${{ steps.deploy-reports.outputs.page_url }}"
 
-    # - name: Add coverage report link to summary
-    #   run: |
-    #     echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
-    #     echo "" >> $GITHUB_STEP_SUMMARY
-    #     echo "${{ steps.deploy-lcov-to-gh-pages.outputs.page_url }}" >> $GITHUB_STEP_SUMMARY
+      #Add reports to the workflow summary.
+    - name: Add reports to workflow summary
+      run: |
+        cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+        ## 📋 Reports [![Quality gate status](https://sonarcloud.io/api/project_badges/measure?project=Ranuldeepanayake_s3-app-backend&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=Ranuldeepanayake_s3-app-backend) 
+
+        - **Coverage:** ${{ steps.deploy-reports.outputs.page_url }}coverage/lcov-report/
+        - **SonarQube:** https://sonarcloud.io/project/overview?id=${{ vars.SONARQUBE_PROJECT_KEY }}
+        - **JMeter:** ${{ steps.deploy-reports.outputs.page_url }}jmeter/
+
+        ---
+        Build completed successfully.
+        EOF
 
       #Additionally, save the reports as an archive.
     - name: Archive reports
@@ -282,20 +293,6 @@ jobs:
         name: reports-archive
         path: reports/
         if-no-files-found: error
-
-    - name: Add summary
-      run: |
-        cat >> "$GITHUB_STEP_SUMMARY" <<EOF
-        ## 📋 Build Reports
-
-        - **Coverage:** ${{ steps.deploy-reports.outputs.page_url }}/coverage/
-        - **Performance:** ${{ steps.deploy-reports.outputs.page_url }}/jmeter/
-        - **SonarQube:** https://sonarcloud.io/project/overview?id=${{ vars.SONARQUBE_PROJECT_KEY }}
-        - [![Quality gate status](https://sonarcloud.io/api/project_badges/measure?project=Ranuldeepanayake_s3-app-backend&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=Ranuldeepanayake_s3-app-backend)
-
-        ---
-        Build completed successfully.
-        EOF
 
     ###############################################
     #Deployment. 
