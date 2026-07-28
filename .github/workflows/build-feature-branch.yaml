@@ -223,42 +223,6 @@ jobs:
         docker run --rm  -v ./coverage:/usr/src/app/coverage \
         ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG} npm run test:coverage
 
-    - name: Configure GitHub Pages
-      if: ${{ env.RUN_TESTS == 'true' }}
-      uses: actions/configure-pages@v5
-
-    - name: Upload Pages artifact
-      if: ${{ env.RUN_TESTS == 'true' }}
-      uses: actions/upload-pages-artifact@v3
-      with:
-        path: coverage/lcov-report
-
-    - name: Deploy to GitHub Pages
-      id: deploy-lcov-to-gh-pages
-      if: ${{ env.RUN_TESTS == 'true' }}
-      uses: actions/deploy-pages@v5
-
-    - name: Print coverage report URL
-      if: ${{ env.RUN_TESTS == 'true' }}
-      run: |
-        echo "Coverage report URL: "
-        echo "${{ steps.deploy-lcov-to-gh-pages.outputs.page_url }}"
-
-    - name: Add coverage report link to summary
-      run: |
-        echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "${{ steps.deploy-lcov-to-gh-pages.outputs.page_url }}" >> $GITHUB_STEP_SUMMARY
-
-      #Additionally, save the coverage test results as an archive.
-    - name: Archive coverage test results
-      uses: actions/upload-artifact@v4
-      if: ${{ env.RUN_TESTS == 'true' }}
-      with:
-        name: coverage-test-results
-        path: coverage/
-        if-no-files-found: error
-
       #Scan with sonarqube. The mounted coverage test artifacts will be read by sonarqube. 
     - name: SonarQube Scan
       if: ${{ env.SONAR_SCAN_ENABLE == 'true' &&  env.RUN_TESTS == 'true' }}  #Needed since if tests are disabled, test components will no be installed in the image.
@@ -271,6 +235,67 @@ jobs:
     - name: Push image to artifact repository
       run: |
         docker push ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG}
+
+      #Template the reports to be published in github pages.
+    - name: Prepare GitHub Pages
+      if: ${{ env.RUN_TESTS == 'true' }}
+      run: |
+        #Clean previously copied reports if they exist.
+        rm -rf reports/coverage reports/jmeter
+
+        #Copy generated reports.
+        cp -r coverage reports/
+        cp -r jmeter reports/ || true #Jmeter report not generated yet.
+
+    - name: Configure GitHub Pages
+      if: ${{ env.RUN_TESTS == 'true' }}
+      uses: actions/configure-pages@v5
+
+    - name: Upload Pages artifact
+      if: ${{ env.RUN_TESTS == 'true' }}
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: reports
+
+    - name: Deploy reports to GitHub Pages
+      id: deploy-reports
+      if: ${{ env.RUN_TESTS == 'true' }}
+      uses: actions/deploy-pages@v5
+
+    - name: Print coverage report URL
+      if: ${{ env.RUN_TESTS == 'true' }}
+      run: |
+        echo "Coverage report URL: "
+        echo "${{ steps.deploy-reports.outputs.page_url }}"
+
+    # - name: Add coverage report link to summary
+    #   run: |
+    #     echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
+    #     echo "" >> $GITHUB_STEP_SUMMARY
+    #     echo "${{ steps.deploy-lcov-to-gh-pages.outputs.page_url }}" >> $GITHUB_STEP_SUMMARY
+
+      #Additionally, save the reports as an archive.
+    - name: Archive reports
+      uses: actions/upload-artifact@v4
+      if: ${{ env.RUN_TESTS == 'true' }}
+      with:
+        name: reports-archive
+        path: reports/
+        if-no-files-found: error
+
+    - name: Add summary
+      run: |
+        cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+        ## 📋 Build Reports
+
+        - **Coverage:** ${{ steps.deploy-reports.outputs.page_url }}/coverage/
+        - **Performance:** ${{ steps.deploy-reports.outputs.page_url }}/jmeter/
+        - **SonarQube:** https://sonarcloud.io/project/overview?id=${{ vars.SONARQUBE_PROJECT_KEY }}
+        - [![Quality gate status](https://sonarcloud.io/api/project_badges/measure?project=Ranuldeepanayake_s3-app-backend&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=Ranuldeepanayake_s3-app-backend)
+
+        ---
+        Build completed successfully.
+        EOF
 
     ###############################################
     #Deployment. 
