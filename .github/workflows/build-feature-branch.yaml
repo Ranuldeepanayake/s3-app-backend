@@ -275,7 +275,7 @@ jobs:
     - name: Add reports to workflow summary
       run: |
         cat >> "$GITHUB_STEP_SUMMARY" <<EOF
-        ## 📋 Reports [![Quality gate status](https://sonarcloud.io/api/project_badges/measure?project=Ranuldeepanayake_s3-app-backend&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=Ranuldeepanayake_s3-app-backend) 
+        ## 📋 [Reports](${{ steps.deploy-reports.outputs.page_url }}) ${{ vars.SONARQUBE_QUALITY_GATE_BADGE }}
 
         - **Coverage:** ${{ steps.deploy-reports.outputs.page_url }}coverage/lcov-report/
         - **SonarQube:** https://sonarcloud.io/project/overview?id=${{ vars.SONARQUBE_PROJECT_KEY }}
