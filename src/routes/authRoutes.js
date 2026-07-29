@@ -2,12 +2,16 @@
 
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const { createApiRateLimiter } = require('../config/rateLimit.js');
 
 const router = express.Router();
 
+// Strict rate limiting for login attempts to prevent brute force attacks.
+const loginRateLimiter = createApiRateLimiter('AUTH_LOGIN');
+
 // Credentials are environment-driven for this demo API. Override every default
 // below before exposing the service outside local development.
-const jwtSecret = process.env.JWT_SECRET || 'change-me';
+const getJwtSecret = () => process.env.JWT_SECRET || 'change-me';
 const authUsername = process.env.AUTH_USERNAME || 'admin';
 const authPassword = process.env.AUTH_PASSWORD || 'admin123';
 const tokenExpiration = process.env.JWT_EXPIRATION || '12h';
@@ -22,7 +26,7 @@ const authenticateToken = (req, res, next) => {
     return res.status(401).json({ message: 'Authentication token is required.' });
   }
 
-  jwt.verify(token, jwtSecret, (error, payload) => {
+  jwt.verify(token, getJwtSecret(), (error, payload) => {
     if (error) {
       return res.status(403).json({ message: 'Invalid or expired token.' });
     }
@@ -34,11 +38,11 @@ const authenticateToken = (req, res, next) => {
 
 // Login compares the submitted credentials with the configured values and
 // returns a short-lived admin token for protected routes.
-router.post('/login', (req, res) => {
+router.post('/login', loginRateLimiter, (req, res) => {
   const { username, password } = req.body || {};
 
   if (username === authUsername && password === authPassword) {
-    const token = jwt.sign({ username, role: 'admin' }, jwtSecret, {
+    const token = jwt.sign({ username, role: 'admin' }, getJwtSecret(), {
       expiresIn: tokenExpiration
     });
 

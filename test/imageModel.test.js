@@ -1,33 +1,40 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
+const { describe, it, expect } = require('@jest/globals');
 
-const Image = require('../models/Image');
-const imageRoutes = require('../routes/imageRoutes');
+jest.mock('../src/config/logger.js', () => ({
+  warn: jest.fn(),
+  info: jest.fn(),
+  error: jest.fn()
+}));
 
-test('Image schema keeps only the fields used for fixed-domain image metadata', () => {
-  const paths = Object.keys(Image.schema.paths);
+const Image = require('../src/models/Image.js');
+const imageRoutes = require('../src/routes/imageRoutes.js');
 
-  assert.ok(paths.includes('name'));
-  assert.ok(paths.includes('fileName'));
-  assert.ok(paths.includes('size'));
-  assert.ok(paths.includes('mimeType'));
-  assert.ok(paths.includes('uploadedAt'));
+describe('image metadata model', () => {
+  it('keeps only the fields used for fixed-domain image metadata', () => {
+    const paths = Object.keys(Image.schema.paths);
 
-  assert.ok(!paths.includes('key'));
-  assert.ok(!paths.includes('bucket'));
-  assert.ok(!paths.includes('signedUrl'));
-  assert.ok(!paths.includes('publicUrl'));
-});
+    expect(paths).toContain('name');
+    expect(paths).toContain('fileName');
+    expect(paths).toContain('size');
+    expect(paths).toContain('mimeType');
+    expect(paths).toContain('uploadedAt');
 
-test('storage keys are generated independently from the display name', () => {
-  const storageKey = imageRoutes.buildStorageFileName('photo.jpg');
-  const storageKeyWithDifferentCase = imageRoutes.buildStorageFileName('Photo.JPG');
+    expect(paths).not.toContain('key');
+    expect(paths).not.toContain('bucket');
+    expect(paths).not.toContain('signedUrl');
+    expect(paths).not.toContain('publicUrl');
+  });
 
-  assert.ok(storageKey.length > 0);
-  assert.ok(storageKeyWithDifferentCase.length > 0);
-  assert.notEqual(storageKey, 'photo.jpg');
-  assert.notEqual(storageKeyWithDifferentCase, 'Photo.JPG');
-  assert.notEqual(storageKey, storageKeyWithDifferentCase);
-  assert.match(storageKey, /[a-z0-9._-]+-[0-9a-f-]+\.[a-z0-9]+/i);
-  assert.match(storageKeyWithDifferentCase, /[a-z0-9._-]+-[0-9a-f-]+\.[a-z0-9]+/i);
+  it('generates storage keys independently from the display name', () => {
+    const storageKey = imageRoutes.buildStorageFileName('photo.jpg');
+    const storageKeyWithDifferentCase = imageRoutes.buildStorageFileName('Photo.JPG');
+
+    expect(storageKey.length).toBeGreaterThan(0);
+    expect(storageKeyWithDifferentCase.length).toBeGreaterThan(0);
+    expect(storageKey).not.toBe('photo.jpg');
+    expect(storageKeyWithDifferentCase).not.toBe('Photo.JPG');
+    expect(storageKey).not.toBe(storageKeyWithDifferentCase);
+    expect(storageKey).toMatch(/[a-z0-9._-]+-[0-9a-f-]+\.[a-z0-9]+/i);
+    expect(storageKeyWithDifferentCase).toMatch(/[a-z0-9._-]+-[0-9a-f-]+\.[a-z0-9]+/i);
+  });
 });

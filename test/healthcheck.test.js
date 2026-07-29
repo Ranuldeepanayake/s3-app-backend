@@ -1,25 +1,36 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
+const { describe, it, expect, afterEach } = require('@jest/globals');
 
-test('mongo health helper returns false when the connection is not ready', async () => {
-  const connectDB = require('../config/db');
-  const result = await connectDB.isMongoHealthy();
+jest.mock('../src/config/logger.js', () => ({
+  warn: jest.fn(),
+  info: jest.fn(),
+  error: jest.fn()
+}));
 
-  assert.equal(result, false);
-});
+describe('health helpers', () => {
+  afterEach(() => {
+    delete process.env.AWS_BUCKET_NAME;
+  });
 
-test('s3 health helper returns false when the bucket is not configured', async () => {
-  const { isS3Healthy } = require('../config/s3');
-  const originalBucket = process.env.AWS_BUCKET_NAME;
+  it('returns false when the mongo connection is not ready', async () => {
+    const connectDB = require('../src/config/db.js');
+    const result = await connectDB.isMongoHealthy();
 
-  delete process.env.AWS_BUCKET_NAME;
+    expect(result).toBe(false);
+  });
 
-  try {
-    const result = await isS3Healthy();
-    assert.equal(result, false);
-  } finally {
-    if (originalBucket !== undefined) {
-      process.env.AWS_BUCKET_NAME = originalBucket;
+  it('returns false when the bucket is not configured', async () => {
+    const { isS3Healthy } = require('../src/config/s3.js');
+    const originalBucket = process.env.AWS_BUCKET_NAME;
+
+    delete process.env.AWS_BUCKET_NAME;
+
+    try {
+      const result = await isS3Healthy();
+      expect(result).toBe(false);
+    } finally {
+      if (originalBucket !== undefined) {
+        process.env.AWS_BUCKET_NAME = originalBucket;
+      }
     }
-  }
+  });
 });
