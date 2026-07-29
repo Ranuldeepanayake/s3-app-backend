@@ -12,6 +12,7 @@ on:
 
 #Global environment variables.
 env:
+  INPUT_IMAGE_TAG: ${{ github.event.inputs.INPUT_IMAGE_TAG }}
   PARENT_BRANCH: main
   COMMIT_USERNAME: github-actions
   COMMIT_EMAIL: github-actions@github.com
