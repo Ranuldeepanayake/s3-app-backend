@@ -72,7 +72,6 @@ jobs:
 
       #Checkout the gitops repository.
     - name: Checkout the deployment repository
-      if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       uses: actions/checkout@v5
       with:
         repository: ${{ env.DEPLOYMENT_REPOSITORY }}
@@ -91,10 +90,6 @@ jobs:
       #Copy the .env file to the deployment repository.
     - name: Copy the .env file to the deployment repository
       run: |
-        pwd
-        ls -la
-        ls -la ${DEPLOYMENT_REPOSITORY_PATH}/environments/s3-app/prod
-
         cp ${PROD_ENVIRONMENT_SOURCE_FILE} ${DEPLOYMENT_REPOSITORY_PATH}/${PROD_ENVIRONMENT_DESTINATION_FILE}
         cd ${DEPLOYMENT_REPOSITORY_PATH}
 
