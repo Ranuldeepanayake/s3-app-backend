@@ -38,9 +38,9 @@ env:
   PRODUCTION_BRANCH: main
   COMMIT_USERNAME: github-actions
   COMMIT_EMAIL: github-actions@github.com
-  PR_REVIEWERS: ranuldeepanayake
-  PR_ASSIGNEES: ranuldeepanayake
-  PR_LABELS: ci, hotfix
+  PR_REVIEWERS: ${{ vars.PR_REVIEWERS }}
+  PR_ASSIGNEES: ${{ vars.PR_ASSIGNEES }}
+  PR_LABELS: ${{ vars.PR_LABELS }}
   DEPLOYMENT_REPOSITORY: Ranuldeepanayake/helm
   DEPLOYMENT_REPOSITORY_BRANCH: develop
   DEPLOYMENT_REPOSITORY_PATH: deployment-repo
@@ -63,7 +63,7 @@ jobs:
     steps:
       #Checkout the branch which is being built.
     - name: Repository checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         clean: true      #Cleans the workspace before checking out code.
         fetch-depth: 0   #Required to push back
@@ -170,7 +170,7 @@ jobs:
 
       #Configure the artifact repository credentials.
     - name: Configure artifact repository credentials
-      uses: aws-actions/configure-aws-credentials@v4
+      uses: aws-actions/configure-aws-credentials@v5
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -256,7 +256,7 @@ jobs:
           -H "Authorization: Bearer $GH_TOKEN" \
           https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/requested_reviewers \
           -d "{
-            \"reviewers\": ${{ env.PR_REVIEWERS }}
+            \"reviewers\": ${PR_REVIEWERS}
           }"
 
         #Add assignees to the PR.
@@ -266,7 +266,7 @@ jobs:
           -H "Authorization: Bearer $GH_TOKEN" \
           https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/assignees \
           -d "{
-            \"assignees\": ${{ env.PR_ASSIGNEES }}
+            \"assignees\": ${PR_ASSIGNEES}
           }"
 
         #Add labels to the PR.
@@ -276,7 +276,7 @@ jobs:
           -H "Authorization: Bearer $GH_TOKEN" \
           https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/labels \
           -d "{
-            \"labels\": ${{ env.PR_LABELS }}
+            \"labels\": ${PR_LABELS}
           }"
 
       #Create a pull request for the production branch through the API. The Peter Evans' PR creator does not work for this scenario.
@@ -304,7 +304,7 @@ jobs:
           -H "Authorization: Bearer $GH_TOKEN" \
           https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/requested_reviewers \
           -d "{
-            \"reviewers\": ${{ env.PR_REVIEWERS }}
+            \"reviewers\": ${PR_REVIEWERS}
           }"
 
         #Add assignees to the PR.
@@ -314,7 +314,7 @@ jobs:
           -H "Authorization: Bearer $GH_TOKEN" \
           https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/assignees \
           -d "{
-            \"assignees\": ${{ env.PR_ASSIGNEES }}
+            \"assignees\": ${PR_ASSIGNEES}
           }"
 
         #Add labels to the PR.
@@ -324,7 +324,7 @@ jobs:
           -H "Authorization: Bearer $GH_TOKEN" \
           https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/labels \
           -d "{
-            \"labels\": ${{ env.PR_LABELS }}
+            \"labels\": ${PR_LABELS}
           }"
 
     ###############################################
@@ -336,7 +336,7 @@ jobs:
       #Checkout the gitops repository.
     - name: Checkout the deployment repository
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         repository: ${{ env.DEPLOYMENT_REPOSITORY }}
         ref: ${{ env.DEPLOYMENT_REPOSITORY_BRANCH }}

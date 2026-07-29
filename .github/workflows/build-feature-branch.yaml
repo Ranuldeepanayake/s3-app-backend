@@ -24,10 +24,30 @@ on:
         options:
           - build
           - build-and-deploy
+            #Input to run tests.
+      RUN_TESTS:
+        description: 'Run unit & coverage tests?'
+        required: true
+        default: true
+        type: choice
+        options:
+          - true
+          - false
+      #Input to scan with sonarqube.
+      SONAR_SCAN_ENABLE:
+        description: 'Scan with sonarqube?'
+        required: true
+        default: true
+        type: choice
+        options:
+          - true
+          - false
 
 #Global environment variables.
 env:
   INPUT_ACTION: ${{ github.event.inputs.INPUT_ACTION || 'build-and-deploy' }} #Default needed since the workflow will not use the input default when run on-push.
+  SONAR_SCAN_ENABLE: ${{ github.event.inputs.SONAR_SCAN_ENABLE || 'true' }}
+  RUN_TESTS: ${{ github.event.inputs.RUN_TESTS || 'true' }}
   VERSION_FILE: package.json
   AWS_REGION: ap-southeast-1
   AWS_USERNAME: AWS
@@ -47,6 +67,8 @@ env:
 #Permissions.
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   build-feature-branch:
@@ -57,7 +79,7 @@ jobs:
     #Checkout the branch which is being built.
     steps:
     - name: Repository checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         clean: true      #Cleans the workspace before checking out code.
         fetch-depth: 0   #Required to push back
@@ -165,7 +187,7 @@ jobs:
 
       #Configure the artifact repository credentials.
     - name: Configure artifact repository credentials
-      uses: aws-actions/configure-aws-credentials@v4
+      uses: aws-actions/configure-aws-credentials@v5
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -185,12 +207,92 @@ jobs:
     - name: Build image
       run: |
         echo "Image name: ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG}"
-        docker build -t ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG} .
+        docker build --build-arg RUN_TESTS=${RUN_TESTS} -t ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG} .
+
+      #Run a temporary Docker container with the built image and mount the coverage test artifacts to a directory in the runner.
+    - name: Run tests in temp container
+      if: ${{ env.RUN_TESTS == 'true' }}  #Needed since if tests are disabled, test components will not be installed in the image.
+      run: |
+        #Check as who the runner is running as. 
+        echo "User: $(whoami) - $(id)"
+
+        #Create the coverage directory to avoid being created by root.
+        mkdir -p ./coverage
+
+        #Run the container as the actions-runner user. Else, it will not be able to be cleaned up due to permission mismatches of the artifacts in the container.
+        docker run --rm  -v ./coverage:/usr/src/app/coverage \
+        ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG} npm run test:coverage
+
+      #Scan with sonarqube. The mounted coverage test artifacts will be read by sonarqube. 
+    - name: SonarQube Scan
+      if: ${{ env.SONAR_SCAN_ENABLE == 'true' &&  env.RUN_TESTS == 'true' }}  #Needed since if tests are disabled, test components will no be installed in the image.
+      uses: SonarSource/sonarqube-scan-action@v8.1.0
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        projectBaseDir: .
 
       #Push the built image to an artifact repository.
     - name: Push image to artifact repository
       run: |
         docker push ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG}
+
+      #Template the reports to be published in github pages.
+    - name: Prepare GitHub pages
+      if: ${{ env.RUN_TESTS == 'true' }}
+      run: |
+        #Clean previously copied reports if they exist.
+        rm -rf reports/coverage reports/jmeter
+
+        #Copy generated reports.
+        cp -r coverage reports/
+        cp -r jmeter reports/ || true #Jmeter report not generated yet.
+
+      #Configure workflow for Github page operations.
+    - name: Configure GitHub Pages
+      if: ${{ env.RUN_TESTS == 'true' }}
+      uses: actions/configure-pages@v5
+
+      #Upload the reports directory to Github pages.
+    - name: Upload reports artifact to Github pages
+      if: ${{ env.RUN_TESTS == 'true' }}
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: reports
+
+      #Deploy the uploaded reports directory.
+    - name: Deploy reports to GitHub Pages
+      id: deploy-reports
+      if: ${{ env.RUN_TESTS == 'true' }}
+      uses: actions/deploy-pages@v5
+
+      #Print the reports URL (optional).
+    - name: Print reports URL
+      if: ${{ env.RUN_TESTS == 'true' }}
+      run: |
+        echo "Coverage report URL: ${{ steps.deploy-reports.outputs.page_url }}"
+
+      #Add reports to the workflow summary.
+    - name: Add reports to workflow summary
+      run: |
+        cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+        ## 📋 [Reports](${{ steps.deploy-reports.outputs.page_url }}) ${{ vars.SONARQUBE_QUALITY_GATE_BADGE }}
+
+        - **Coverage:** ${{ steps.deploy-reports.outputs.page_url }}coverage/lcov-report/
+        - **SonarQube:** https://sonarcloud.io/project/overview?id=${{ vars.SONARQUBE_PROJECT_KEY }}
+        - **JMeter:** ${{ steps.deploy-reports.outputs.page_url }}jmeter/
+
+        ---
+        Build completed successfully.
+        EOF
+
+      #Additionally, save the reports as an archive.
+    - name: Archive reports
+      uses: actions/upload-artifact@v4
+      if: ${{ env.RUN_TESTS == 'true' }}
+      with:
+        name: reports-archive
+        path: reports/
+        if-no-files-found: error
 
     ###############################################
     #Deployment. 
@@ -201,7 +303,7 @@ jobs:
     #Checkout the gitops repository.
     - name: Checkout the deployment repository
       if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         repository: ${{ env.DEPLOYMENT_REPOSITORY }}
         ref: ${{ env.DEPLOYMENT_REPOSITORY_BRANCH }}
