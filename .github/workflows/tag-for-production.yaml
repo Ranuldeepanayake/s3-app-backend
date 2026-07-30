@@ -29,6 +29,7 @@ jobs:
   tag-for-production:
   
     runs-on: ubuntu-latest  #Runner label.
+    environment: production #Environment.
     timeout-minutes: 30     #Timeout against runaway jobs.
 
     steps:
