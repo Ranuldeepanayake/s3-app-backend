@@ -267,7 +267,7 @@ jobs:
           GH_TOKEN: ${{ github.token }} #Created automatically when the pipeline runs.
         run: |
           #Create the PR and get the PR number.
-          PR_NUMBER=$(curl -sS -L \
+          PR_NUMBER=$(curl -vsSL \
             -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GH_TOKEN" \
