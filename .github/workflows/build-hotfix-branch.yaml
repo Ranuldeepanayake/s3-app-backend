@@ -10,9 +10,10 @@ name: Build hotfix branch
 
 #Trigger the workflow on-push and manually.
 on:
-  push:
-    branches: 
-    - "hotfix/**"
+  #If enabled, the workflow runs when conflicts are resolved through the GUI which is troublesome.
+  # push:
+  #   branches: 
+  #   - "hotfix/**"
   workflow_dispatch:
     inputs:
       #Input to select the action.

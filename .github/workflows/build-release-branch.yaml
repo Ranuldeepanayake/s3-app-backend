@@ -7,9 +7,9 @@ name: Build release branch
 
 #Trigger the workflow on-push and manually.
 on:
-  # push:
-  #   branches: 
-  #   - "release/**"
+  push:
+    branches: 
+    - "release/**"
   workflow_dispatch:
     inputs:
       #Input to select the action.
