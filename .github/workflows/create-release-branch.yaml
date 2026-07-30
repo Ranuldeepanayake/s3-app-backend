@@ -154,55 +154,6 @@ jobs:
           #Push the tag.
           git push origin ${RC_VERSION}
 
-        #Create a pull request for the production branch through the API. The Peter Evans' PR creator does not work for this scenario.
-        #This supports the creation of a pull request while the release candidate is at 0.
-      - name: Create pull request for production
-        env:
-          GH_TOKEN: ${{ github.token }} #Created automatically when the pipeline runs.
-        run: |
-          #Create the PR and get the PR number.
-          PR_NUMBER=$(curl -s -L \
-            -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            https://api.github.com/repos/${{ github.repository }}/pulls \
-            -d '{
-              "title":"Pipeline (release): Merge release changes of ${{ env.VERSION_NUMBER }} into ${{ env.PRODUCTION_BRANCH }}",
-              "head":"${{ env.NEW_BRANCH_NAME }}",
-              "base":"${{ env.PRODUCTION_BRANCH }}",
-              "body":"Pipeline (release): Merge release changes of ${{ env.VERSION_NUMBER }} from ${{ env.NEW_BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
-            }' | jq -r '.number')
-
-          #Add reviewers to the PR.
-          curl -s -L \
-            -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/requested_reviewers \
-            -d "{
-              \"reviewers\": ${PR_REVIEWERS}
-            }"
-
-          #Add assignees to the PR.
-          curl -s -L \
-            -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/assignees \
-            -d "{
-              \"assignees\": ${PR_ASSIGNEES}
-            }"
-
-          #Add labels to the PR.
-          curl -s -L \
-            -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/labels \
-            -d "{
-              \"labels\": ${PR_LABELS}
-            }"
-
         #Checkout the parent branch.
       - name: Checkout develop branch
         run: |
@@ -308,6 +259,55 @@ jobs:
       - name: Push image to artifact repository
         run: |
           docker push ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG}
+
+        #Create a pull request for the production branch through the API. The Peter Evans' PR creator does not work for this scenario.
+        #This supports the creation of a pull request while the release candidate is at 0.
+      - name: Create pull request for production
+        env:
+          GH_TOKEN: ${{ github.token }} #Created automatically when the pipeline runs.
+        run: |
+          #Create the PR and get the PR number.
+          PR_NUMBER=$(curl -s -L \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            https://api.github.com/repos/${{ github.repository }}/pulls \
+            -d '{
+              "title":"Pipeline (release): Merge release changes of ${{ env.VERSION_NUMBER }} into ${{ env.PRODUCTION_BRANCH }}",
+              "head":"${{ env.NEW_BRANCH_NAME }}",
+              "base":"${{ env.PRODUCTION_BRANCH }}",
+              "body":"Pipeline (release): Merge release changes of ${{ env.VERSION_NUMBER }} from ${{ env.NEW_BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
+            }' | jq -r '.number')
+
+          #Add reviewers to the PR.
+          curl -s -L \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/requested_reviewers \
+            -d "{
+              \"reviewers\": ${PR_REVIEWERS}
+            }"
+
+          #Add assignees to the PR.
+          curl -s -L \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/assignees \
+            -d "{
+              \"assignees\": ${PR_ASSIGNEES}
+            }"
+
+          #Add labels to the PR.
+          curl -s -L \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/labels \
+            -d "{
+              \"labels\": ${PR_LABELS}
+            }"
 
       ###############################################
       #Deployment. 
