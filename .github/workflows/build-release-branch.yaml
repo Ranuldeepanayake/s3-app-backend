@@ -1,15 +1,17 @@
 #Build a release branch, upload the artifact to a repository and update the GitOps repository.
 #Do a build first with an incremented rc number. If the build fails, don't increment the rc number in the repo or create a tag
 #since a keeping broken build has no value. If the build is successful, increment the rc number in the repo, create a tag and
-#deploy to QA.
+#deploy to QA. If the merge from release to develop fails due to merge conflicts other than for the version file (which is already handled in the pipeline),
+#the conflicting files must be handled first through a merge by keeping the version from either the release or develop branches.
 
 name: Build release branch
 
 #Trigger the workflow on-push and manually.
 on:
-  push:
-    branches: 
-    - "release/**"
+  #If enabled, the workflow runs when conflicts are resolved through the GUI which is troublesome.
+  # push:
+  #   branches: 
+  #   - "release/**"
   workflow_dispatch:
     inputs:
       #Input to select the action.
@@ -227,22 +229,25 @@ jobs:
     - name: Checkout develop branch
       run: |
         git checkout ${PARENT_BRANCH}
-        echo "Selected branch: $(git branch)"
+        echo "Selected branch: $(git branch -l)"
         echo "Original branch name: ${BRANCH_NAME}"
 
       #Merge the release branch into the develop branch except for the version file, commit and push.
     - name: Merge release into develop
       run: |
-        echo "Branch name: ${BRANCH_NAME}"
+        echo "Original branch name: ${BRANCH_NAME}"
 
         #Merge even with conflicts. There will be a conflict in the version file since the version file was 
         #updated in the release branch. So, use the version file from the develop branch.
         git merge --no-commit --no-ff ${BRANCH_NAME} || true
+
+        #Retain the version file from the develop branch.
         git checkout --ours ${VERSION_FILE}
         git add ${VERSION_FILE}
 
         git status
 
+        #Conclude the merge with a commit.
         git commit --allow-empty -m "Pipeline (merged release into develop): merged ${BRANCH_NAME} into ${PARENT_BRANCH} and incremented the rc tag to ${INCREMENTED_VERSION}"
         git push origin ${PARENT_BRANCH}
 
