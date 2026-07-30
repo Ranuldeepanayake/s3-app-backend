@@ -277,7 +277,7 @@ jobs:
               "head":"${{ env.NEW_BRANCH_NAME }}",
               "base":"${{ env.PRODUCTION_BRANCH }}",
               "body":"Pipeline (release): Merge release changes of ${{ env.VERSION_NUMBER }} from ${{ env.NEW_BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
-            }')
+            }' | jq -r '.number')
 
           echo "Pull request number: $PR_NUMBER"
 
