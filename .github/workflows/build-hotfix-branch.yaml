@@ -236,8 +236,13 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }} #Created automatically when the pipeline runs.
       run: |
-        #Create the PR and get the PR number.
-        PR_NUMBER=$(curl -sSL \
+        #Create a temporary file and write the output of the the request to it while printing the status code to STDOUT for easier debugging.
+        HTTP_RESPONSE=$(mktemp)
+
+        #Make the API call.
+        HTTP_STATUS_CODE=$(curl -sSL \
+          -o "$HTTP_RESPONSE" \
+          -w "%{http_code}" \
           -X POST \
           -H "Accept: application/vnd.github+json" \
           -H "Authorization: Bearer $GH_TOKEN" \
@@ -247,8 +252,12 @@ jobs:
             "head":"${{ env.BRANCH_NAME }}",
             "base":"${{ env.PARENT_BRANCH }}",
             "body":"Pipeline (hotfix): Merge hotfix changes of ${{ env.VERSION_NUMBER_FIRST_SEGMENT }} from ${{ env.BRANCH_NAME }} into ${{ env.PARENT_BRANCH }}"
-          }' | jq -r '.number')
+          }')
 
+        echo "HTTP status code: $HTTP_STATUS_CODE"
+
+        #Get the PR number.
+        PR_NUMBER=$(jq -r '.number' "$HTTP_RESPONSE")
         echo "Pull request number: $PR_NUMBER"
 
         #Add reviewers to the PR.
@@ -286,8 +295,13 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }} #Created automatically when the pipeline runs.
       run: |
-        #Create the PR and get the PR number.
-        PR_NUMBER=$(curl -sSL \
+        #Create a temporary file and write the output of the the request to it while printing the status code to STDOUT for easier debugging.
+        HTTP_RESPONSE=$(mktemp)
+
+        #Make the API call.
+        HTTP_STATUS_CODE=$(curl -sSL \
+          -o "$HTTP_RESPONSE" \
+          -w "%{http_code}" \
           -X POST \
           -H "Accept: application/vnd.github+json" \
           -H "Authorization: Bearer $GH_TOKEN" \
@@ -297,7 +311,13 @@ jobs:
             "head":"${{ env.BRANCH_NAME }}",
             "base":"${{ env.PRODUCTION_BRANCH }}",
             "body":"Pipeline (hotfix): Merge hotfix changes of ${{ env.VERSION_NUMBER_FIRST_SEGMENT }} from ${{ env.BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
-          }' | jq -r '.number')
+          }')
+
+        echo "HTTP status code: $HTTP_STATUS_CODE"
+
+        #Get the PR number.
+        PR_NUMBER=$(jq -r '.number' "$HTTP_RESPONSE")
+        echo "Pull request number: $PR_NUMBER"
 
         #Add reviewers to the PR.
         curl -sSL \

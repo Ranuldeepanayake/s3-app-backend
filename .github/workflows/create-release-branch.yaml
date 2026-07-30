@@ -270,7 +270,7 @@ jobs:
           #Create a temporary file and write the output of the the request to it while printing the status code to STDOUT for easier debugging.
           HTTP_RESPONSE=$(mktemp)
 
-          #Create the PR and get the PR number.
+          #Make the API call.
           HTTP_STATUS_CODE=$(curl -sSL \
             -o "$HTTP_RESPONSE" \
             -w "%{http_code}" \
@@ -287,6 +287,7 @@ jobs:
 
           echo "HTTP status code: $HTTP_STATUS_CODE"
 
+          #Get the PR number.
           PR_NUMBER=$(jq -r '.number' "$HTTP_RESPONSE")
           echo "Pull request number: $PR_NUMBER"
 
