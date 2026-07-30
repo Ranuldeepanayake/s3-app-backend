@@ -58,6 +58,7 @@ env:
 #Permissions.
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   create-release-branch:
@@ -266,8 +267,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }} #Created automatically when the pipeline runs.
         run: |
+          #Create a temporary file and write the output of the the request to it while printing the status code to STDOUT for easier debugging.
+          HTTP_RESPONSE=$(mktemp)
+
           #Create the PR and get the PR number.
-          PR_NUMBER=$(curl -sL \
+          HTTP_STATUS_CODE=$(curl -sSL \
+            -o "$HTTP_RESPONSE" \
+            -w "%{http_code}" \
             -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GH_TOKEN" \
@@ -277,12 +283,15 @@ jobs:
               "head":"${{ env.NEW_BRANCH_NAME }}",
               "base":"${{ env.PRODUCTION_BRANCH }}",
               "body":"Pipeline (release): Merge release changes of ${{ env.VERSION_NUMBER }} from ${{ env.NEW_BRANCH_NAME }} into ${{ env.PRODUCTION_BRANCH }}"
-            }' | jq -r '.number')
+            }')
 
+          echo "HTTP status code: $HTTP_STATUS_CODE"
+
+          PR_NUMBER=$(jq -r '.number' "$RESPONSE")
           echo "Pull request number: $PR_NUMBER"
 
           #Add reviewers to the PR.
-          curl -s -L \
+          curl -sSL \
             -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GH_TOKEN" \
@@ -292,7 +301,7 @@ jobs:
             }"
 
           #Add assignees to the PR.
-          curl -s -L \
+          curl -sSL \
             -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GH_TOKEN" \
@@ -302,7 +311,7 @@ jobs:
             }"
 
           #Add labels to the PR.
-          curl -s -L \
+          curl -sSL \
             -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GH_TOKEN" \

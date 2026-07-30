@@ -10,9 +10,9 @@ name: Build hotfix branch
 
 #Trigger the workflow on-push and manually.
 on:
-  # push:
-  #   branches: 
-  #   - "hotfix/**"
+  push:
+    branches: 
+    - "hotfix/**"
   workflow_dispatch:
     inputs:
       #Input to select the action.
@@ -237,7 +237,7 @@ jobs:
         GH_TOKEN: ${{ github.token }} #Created automatically when the pipeline runs.
       run: |
         #Create the PR and get the PR number.
-        PR_NUMBER=$(curl -s -L \
+        PR_NUMBER=$(curl -sSL \
           -X POST \
           -H "Accept: application/vnd.github+json" \
           -H "Authorization: Bearer $GH_TOKEN" \
@@ -249,8 +249,10 @@ jobs:
             "body":"Pipeline (hotfix): Merge hotfix changes of ${{ env.VERSION_NUMBER_FIRST_SEGMENT }} from ${{ env.BRANCH_NAME }} into ${{ env.PARENT_BRANCH }}"
           }' | jq -r '.number')
 
+        echo "Pull request number: $PR_NUMBER"
+
         #Add reviewers to the PR.
-        curl -s -L \
+        curl -sSL \
           -X POST \
           -H "Accept: application/vnd.github+json" \
           -H "Authorization: Bearer $GH_TOKEN" \
@@ -260,7 +262,7 @@ jobs:
           }"
 
         #Add assignees to the PR.
-        curl -s -L \
+        curl -sSL \
           -X POST \
           -H "Accept: application/vnd.github+json" \
           -H "Authorization: Bearer $GH_TOKEN" \
@@ -270,7 +272,7 @@ jobs:
           }"
 
         #Add labels to the PR.
-        curl -s -L \
+        curl -sSL \
           -X POST \
           -H "Accept: application/vnd.github+json" \
           -H "Authorization: Bearer $GH_TOKEN" \
@@ -285,7 +287,7 @@ jobs:
         GH_TOKEN: ${{ github.token }} #Created automatically when the pipeline runs.
       run: |
         #Create the PR and get the PR number.
-        PR_NUMBER=$(curl -s -L \
+        PR_NUMBER=$(curl -sSL \
           -X POST \
           -H "Accept: application/vnd.github+json" \
           -H "Authorization: Bearer $GH_TOKEN" \
@@ -298,7 +300,7 @@ jobs:
           }' | jq -r '.number')
 
         #Add reviewers to the PR.
-        curl -s -L \
+        curl -sSL \
           -X POST \
           -H "Accept: application/vnd.github+json" \
           -H "Authorization: Bearer $GH_TOKEN" \
@@ -308,7 +310,7 @@ jobs:
           }"
 
         #Add assignees to the PR.
-        curl -s -L \
+        curl -sSL \
           -X POST \
           -H "Accept: application/vnd.github+json" \
           -H "Authorization: Bearer $GH_TOKEN" \
@@ -318,7 +320,7 @@ jobs:
           }"
 
         #Add labels to the PR.
-        curl -s -L \
+        curl -sSL \
           -X POST \
           -H "Accept: application/vnd.github+json" \
           -H "Authorization: Bearer $GH_TOKEN" \
