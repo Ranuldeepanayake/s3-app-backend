@@ -4,11 +4,11 @@ name: Build feature branch
 
 #Trigger the workflow on push, on pull requests and manually.
 on:
-  # push:
-  #   branches: 
-  #   - develop
-  #   - "feature/**"
-  #   - "bugfix/**"
+  push:
+    branches: 
+    - develop
+    - "feature/**"
+    - "bugfix/**"
   pull_request:
     types: [opened]
     branches:
