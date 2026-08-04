@@ -8,6 +8,7 @@ const os = require('os');
 const mongoose = require('mongoose');
 const multer = require('multer');
 const connectDB = require('./config/db');
+const { configureTrustProxy } = require('./config/trustProxy');
 const { createApiRateLimiter, logRateLimitConfiguration } = require('./config/rateLimit');
 const imageRoutes = require('./routes/imageRoutes');
 const { router: authRouter, authenticateToken } = require('./routes/authRoutes');
@@ -15,6 +16,7 @@ const { testS3Connection, isS3Healthy } = require('./config/s3');
 const logger = require('./config/logger');
 
 const app = express();
+configureTrustProxy(app);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

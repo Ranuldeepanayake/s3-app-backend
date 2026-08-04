@@ -61,9 +61,12 @@ AUTH_USERNAME=admin
 AUTH_PASSWORD=admin123
 JWT_SECRET=change-me
 JWT_EXPIRATION=12h
+TRUST_PROXY=1
 ```
 
 Change `AUTH_USERNAME`, `AUTH_PASSWORD`, and `JWT_SECRET` before using the API outside local development.
+
+Set `TRUST_PROXY=1` when running behind a Kubernetes ingress, reverse proxy, or load balancer so Express and `express-rate-limit` can use forwarded client IP headers correctly. Leave it unset or `false` only for direct local development without a proxy.
 
 ## Local Development
 

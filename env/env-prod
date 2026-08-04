@@ -8,5 +8,6 @@ env:
     JWT_EXPIRATION: 1h
     RATE_LIMIT_WINDOW_MS: 900000
     RATE_LIMIT_MAX_REQUESTS: 100
+    TRUST_PROXY: 1
 #Some sensistive environment variables have been mounted as secrets. These secrets are mounted as environment variables in the container.
 
