@@ -6,7 +6,7 @@ env:
     AWS_CLOUDFRONT_DOMAIN_NAME: cdn.s3-app.ranul.click
     MAX_IMAGE_SIZE_BYTES: 5242880
     JWT_EXPIRATION: 1h
-    RATE_LIMIT_WINDOW_MS: 900000
+    RATE_LIMIT_WINDOW_MS: 5000
     RATE_LIMIT_MAX_REQUESTS: 100
     TRUST_PROXY: 1
 #Some sensistive environment variables have been mounted as secrets. These secrets are mounted as environment variables in the container.
