@@ -14,7 +14,7 @@ services:
       - .env
 
     #Resources referenced from the relevant directory.
-    s3-app-frontend:
+  s3-app-frontend:
     build:
       context: ../s3-app-frontend
       dockerfile: Dockerfile
