@@ -10,10 +10,22 @@ services:
       - s3-app
     ports:
       - "3100:3100"
-    environment:
-      #- MAX_IMAGE_SIZE_BYTES=5242880
     env_file:
       - .env
+
+    #Resources referenced from the relevant directory.
+    s3-app-frontend:
+    build:
+      context: ../s3-app-frontend
+      dockerfile: Dockerfile
+    container_name: s3-app-frontend
+    restart: unless-stopped
+    networks: 
+      - s3-app
+    ports:
+      - "3300:3300"
+    env_file:
+      - ../s3-app-frontend/.env
 
 networks:
   s3-app:

@@ -93,23 +93,17 @@ By default the API listens on `http://localhost:3100`. If your `.env` overrides 
 On startup the app connects to MongoDB, checks access to the configured S3 bucket, and starts the HTTP server. If S3 is unavailable, startup continues and the health endpoints report a degraded state.
 
 ## Docker
-
-Build the image:
+Build and run
 
 ```bash
 docker build -t s3-app-backend .
-```
-
-Run with your environment file:
-
-```bash
 docker run -p 3100:3100 --env-file .env s3-app-backend
 ```
 
-Or use Docker Compose:
+Use Docker Compose (builds and deploys both the backend and frontend):
 
 ```bash
-docker compose up --build
+docker compose up -d --build
 ```
 
 ## Logging
