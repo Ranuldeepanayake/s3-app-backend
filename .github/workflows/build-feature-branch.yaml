@@ -236,7 +236,7 @@ jobs:
       run: |
         docker push ${ECR_REPOSITORY_URL}/${ECR_REPOSITORY_GROUP}/${ECR_REPOSITORY_NAME}:${IMAGE_TAG}
 
-      #Template the reports to be published in github pages.
+      #Template the reports to be published on github pages.
     - name: Prepare GitHub pages
       if: ${{ env.RUN_TESTS == 'true' }}
       run: |
@@ -273,6 +273,7 @@ jobs:
 
       #Add reports to the workflow summary.
     - name: Add reports to workflow summary
+      if: ${{ env.RUN_TESTS == 'true' }}
       run: |
         cat >> "$GITHUB_STEP_SUMMARY" <<EOF
         ## 📋 [Reports](${{ steps.deploy-reports.outputs.page_url }}) ${{ vars.SONARQUBE_QUALITY_GATE_BADGE }}
