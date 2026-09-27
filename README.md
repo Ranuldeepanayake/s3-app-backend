@@ -1,6 +1,6 @@
 # s3-app-backend
 
-Express API for uploading, listing, updating, and deleting images in AWS S3, with MongoDB metadata, JWT-protected admin actions, CloudFront render URLs, and health checks for container deployments.
+Express API for uploading, listing, updating, and deleting images in AWS S3, with MongoDB metadata, PostgreSQL-backed login, JWT-protected admin actions, CloudFront render URLs, and health checks for container deployments.
 
 ## What It Does
 
@@ -11,7 +11,8 @@ Express API for uploading, listing, updating, and deleting images in AWS S3, wit
 - Replaces existing S3 objects during image updates
 - Deletes individual images or, with authentication, all images
 - Uses disk-based temporary upload handling instead of in-memory buffers
-- Reports MongoDB and S3 health through live and ready endpoints
+- Validates login credentials from PostgreSQL
+- Reports MongoDB, PostgreSQL, and S3 health through live and ready endpoints
 - Logs request, database, S3, route, and startup activity with timestamps
 
 ## Project Structure
@@ -19,6 +20,7 @@ Express API for uploading, listing, updating, and deleting images in AWS S3, wit
 ```text
 server.js              Express app, middleware, health routes, startup flow
 config/db.js           MongoDB connection and health helper
+config/postgres.js     RDS PostgreSQL IAM pool, retry, and health helper
 config/s3.js           AWS S3 client and bucket health helper
 config/logger.js       Timestamped console logger
 models/Image.js        Mongoose schema for image metadata
@@ -32,7 +34,9 @@ legacy/                Older implementation kept for reference
 
 - Node.js 18+ for local development
 - MongoDB
-- AWS credentials with access to the target S3 bucket
+- AWS access keys with access to the target S3 bucket
+- An EKS Pod Identity Association whose IAM role can connect to RDS
+- An RDS PostgreSQL instance with IAM database authentication enabled
 - Docker, optional
 
 The Docker image uses `node:24-alpine`.
@@ -57,14 +61,23 @@ AWS_SECRET_ACCESS_KEY=your-secret-key
 AWS_BUCKET_NAME=your-bucket-name
 AWS_CLOUDFRONT_DOMAIN_NAME=your-distribution.cloudfront.net
 MAX_IMAGE_SIZE_BYTES=5242880
-AUTH_USERNAME=admin
-AUTH_PASSWORD=admin123
+DB_HOST=your-rds-endpoint.region.rds.amazonaws.com
+DB_PORT=5432
+DB_USERNAME=s3_app_user
+DB_NAME=s3-app
+DB_POOL_MAX=10
+DB_POOL_IDLE_TIMEOUT_MS=30000
+DB_CONNECTION_TIMEOUT_MS=5000
 JWT_SECRET=change-me
 JWT_EXPIRATION=12h
 TRUST_PROXY=1
 ```
 
-Change `AUTH_USERNAME`, `AUTH_PASSWORD`, and `JWT_SECRET` before using the API outside local development.
+S3 uses `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`. For RDS only, configure an EKS Pod Identity Association for the service account; its IAM role needs `rds-db:connect` for the RDS database user.
+
+`DB_HOST`, `DB_PORT`, `DB_USERNAME`, and `DB_NAME` identify the authentication database. The application requests a new RDS IAM token every time the PostgreSQL pool opens a new connection, so tokens are never reused for newly created clients. TLS certificate verification is required.
+
+Run [database/postgres-bootstrap.sql](/C:/Users/ranul/Documents/GitHub/s3-app-backend/database/postgres-bootstrap.sql) with an RDS PostgreSQL administrator using `psql`; it creates the `s3_app_user` IAM database user, the `s3-app` database, its public-schema privileges, and the minimalist `app_users` login table. The script intentionally does not insert a default account. Add the first account through an approved administrative process. The requested `password` column is plaintext; this is unsafe for a production service and should be changed to a password hash when that database contract can be revised.
 
 Set `TRUST_PROXY=1` when running behind a Kubernetes ingress, reverse proxy, or load balancer so Express and `express-rate-limit` can use forwarded client IP headers correctly. Leave it unset or `false` only for direct local development without a proxy.
 
@@ -90,7 +103,7 @@ npm start
 
 By default the API listens on `http://localhost:3100`. If your `.env` overrides `PORT`, use that port instead.
 
-On startup the app connects to MongoDB, checks access to the configured S3 bucket, and starts the HTTP server. If S3 is unavailable, startup continues and the health endpoints report a degraded state.
+On startup the app connects to MongoDB, probes S3, and probes RDS PostgreSQL with three bounded retries. The HTTP server still starts when S3 or PostgreSQL is unavailable so the health endpoints can report a degraded state. PostgreSQL queries use a connection pool and each health probe executes `SELECT 1`.
 
 ## Docker
 Build and run
@@ -120,7 +133,7 @@ The application logs timestamped messages with component labels such as:
 
 ## Authentication
 
-Log in with the configured username and password:
+Log in with a username and plaintext password stored in `public.app_users`:
 
 ```bash
 curl -X POST http://localhost:3100/api/auth/login \
@@ -141,7 +154,7 @@ Protected routes include `GET /api/health/ready`, `GET /api/auth/test-protected`
 | Method | Path | Auth | Description |
 | --- | --- | --- | --- |
 | `GET` | `/` | No | Basic API information |
-| `POST` | `/api/auth/login` | No | Create a JWT from configured credentials |
+| `POST` | `/api/auth/login` | No | Create a JWT from PostgreSQL credentials |
 | `GET` | `/api/auth/test-protected` | Yes | Confirm JWT authentication works |
 | `GET` | `/api/health/live` | No | Check MongoDB and S3 dependency health |
 | `GET` | `/api/health/ready` | Yes | Check dependency health plus container/AWS details |
@@ -179,29 +192,25 @@ Configure CloudFront so the distribution can read from the S3 bucket and serve o
 
 `GET /api/health/live` returns:
 
-- `200` with `status: "ok"` when MongoDB and S3 are reachable
-- `503` with `status: "degraded"` when either dependency is down
+- `200` with `status: "ok"` when MongoDB, PostgreSQL, and S3 are reachable
+- `503` with `status: "degraded"` when any dependency is down
 
 `GET /api/health/ready` requires a JWT and adds container hostname, container IP address, AWS region, and bucket name.
 
 ## Tests
 
-The project uses Node.js' built-in test runner, so no separate test framework is required. Run the test suite with:
+The project uses Jest. Run the test suite with:
 
 ```bash
 npm test
 ```
 
-That command runs:
-
-```bash
-node --test
-```
-
-The current tests live in `test/healthcheck.test.js` and verify dependency health behavior:
+The current tests verify dependency health behavior, PostgreSQL pool probes, and login handling:
 
 - MongoDB health returns `false` when Mongoose is not connected
 - S3 health returns `false` when `AWS_BUCKET_NAME` is not configured
+- PostgreSQL health returns `false` when required RDS configuration is missing
+- Login uses a parameterized PostgreSQL query and returns `503` when RDS is unavailable
 
 Install dependencies with `npm install` before running tests in a fresh checkout.
 

@@ -13,6 +13,7 @@ const { createApiRateLimiter, logRateLimitConfiguration } = require('./config/ra
 const imageRoutes = require('./routes/imageRoutes');
 const { router: authRouter, authenticateToken } = require('./routes/authRoutes');
 const { testS3Connection, isS3Healthy } = require('./config/s3');
+const { testPostgresConnection, isPostgresHealthy } = require('./config/postgres');
 const logger = require('./config/logger');
 
 const app = express();
@@ -46,18 +47,22 @@ const getContainerIp = () => {
 // Health checks intentionally verify both external dependencies. A degraded
 // response means the process is alive, but image operations may not succeed.
 const checkHealth = async () => {
-  const [mongoHealthy, s3Healthy] = await Promise.all([
+  const [mongoHealthy, s3Healthy, postgresHealthy] = await Promise.all([
     require('./config/db').isMongoHealthy(),
-    isS3Healthy()
+    isS3Healthy(),
+    isPostgresHealthy()
   ]);
 
   return {
-    status: mongoHealthy && s3Healthy ? 'ok' : 'degraded',
+    status: mongoHealthy && s3Healthy && postgresHealthy ? 'ok' : 'degraded',
     mongodb: {
       status: mongoHealthy ? 'up' : 'down'
     },
     s3: {
       status: s3Healthy ? 'up' : 'down'
+    },
+    postgresql: {
+      status: postgresHealthy ? 'up' : 'down'
     }
   };
 };
@@ -163,6 +168,7 @@ const startServer = async () => {
       port: PORT,
       host: HOST,
       mongodbUriConfigured: Boolean(process.env.MONGODB_URI),
+      postgresConfigured: Boolean(process.env.DB_HOST && process.env.DB_USERNAME && process.env.DB_NAME),
       awsBucketConfigured: Boolean(process.env.AWS_BUCKET_NAME),
       awsRegion: process.env.AWS_REGION || 'not-set',
       cloudFrontConfigured: Boolean(process.env.AWS_CLOUDFRONT_DOMAIN_NAME),
@@ -171,9 +177,16 @@ const startServer = async () => {
 
     await connectDB();
 
-    const s3Ready = await testS3Connection();
+    const [s3Ready, postgresReady] = await Promise.all([
+      testS3Connection(),
+      testPostgresConnection()
+    ]);
     if (!s3Ready) {
       logger.warn('STARTUP', 'S3 connection unavailable, but continuing startup.');
+    }
+
+    if (!postgresReady) {
+      logger.warn('STARTUP', 'RDS PostgreSQL unavailable, but continuing startup.');
     }
 
     app.listen(PORT, HOST, () => {
