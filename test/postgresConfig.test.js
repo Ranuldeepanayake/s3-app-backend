@@ -2,6 +2,7 @@ const { describe, it, expect, beforeEach, afterEach } = require('@jest/globals')
 
 const mockQuery = jest.fn();
 const mockOn = jest.fn();
+const mockContainerCredentials = jest.fn();
 
 jest.mock('fs', () => ({
   readFileSync: jest.fn(() => Buffer.from('rds-ca-bundle'))
@@ -17,6 +18,10 @@ jest.mock('pg', () => ({
 
 jest.mock('@aws-sdk/rds-signer', () => ({
   Signer: jest.fn(() => ({ getAuthToken: jest.fn().mockResolvedValue('iam-token') }))
+}));
+
+jest.mock('@aws-sdk/credential-providers', () => ({
+  fromContainerMetadata: jest.fn(() => mockContainerCredentials)
 }));
 
 jest.mock('../src/config/logger.js', () => ({
@@ -36,6 +41,7 @@ describe('PostgreSQL config', () => {
     process.env.DB_USERNAME = 's3_app_user';
     process.env.DB_NAME = 's3-app';
     process.env.AWS_REGION = 'us-east-1';
+    process.env.AWS_CONTAINER_CREDENTIALS_FULL_URI = 'http://169.254.170.23/creds';
     process.env.DB_CA_CERT_PATH = '/mnt/rds-ca/global-bundle.pem';
   });
 
@@ -53,6 +59,8 @@ describe('PostgreSQL config', () => {
 
   it('uses a pooled query for its active healthcheck', async () => {
     const { Pool } = require('pg');
+    const { Signer } = require('@aws-sdk/rds-signer');
+    const { fromContainerMetadata } = require('@aws-sdk/credential-providers');
     const fs = require('fs');
     mockQuery.mockResolvedValue({ rows: [{ '?column?': 1 }] });
     const { isPostgresHealthy } = require('../src/config/postgres.js');
@@ -62,6 +70,10 @@ describe('PostgreSQL config', () => {
     expect(fs.readFileSync).toHaveBeenCalledWith('/mnt/rds-ca/global-bundle.pem');
     expect(Pool).toHaveBeenCalledWith(expect.objectContaining({
       ssl: { ca: Buffer.from('rds-ca-bundle'), rejectUnauthorized: true }
+    }));
+    expect(fromContainerMetadata).toHaveBeenCalledTimes(1);
+    expect(Signer).toHaveBeenCalledWith(expect.objectContaining({
+      credentials: mockContainerCredentials
     }));
   });
 

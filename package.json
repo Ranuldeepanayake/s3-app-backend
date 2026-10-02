@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.621.0",
+    "@aws-sdk/credential-providers": "^3.1145.0",
     "@aws-sdk/rds-signer": "^3.621.0",
     "dotenv": "^16.4.0",
     "express": "^4.19.0",
