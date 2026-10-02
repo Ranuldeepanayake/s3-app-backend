@@ -3,7 +3,7 @@
 
 const { Pool } = require('pg');
 const { Signer } = require('@aws-sdk/rds-signer');
-const { fromContainerMetadata } = require('@aws-sdk/credential-providers');
+const { fromHttp } = require('@aws-sdk/credential-providers');
 const fs = require('fs');
 const logger = require('./logger');
 
@@ -62,7 +62,7 @@ const getPool = () => {
     username: configuration.user,
     region: configuration.region,
     credentials: process.env.AWS_CONTAINER_CREDENTIALS_FULL_URI
-      ? fromContainerMetadata()
+      ? fromHttp()
       : undefined
   });
 

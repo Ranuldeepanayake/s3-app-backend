@@ -21,7 +21,7 @@ jest.mock('@aws-sdk/rds-signer', () => ({
 }));
 
 jest.mock('@aws-sdk/credential-providers', () => ({
-  fromContainerMetadata: jest.fn(() => mockContainerCredentials)
+  fromHttp: jest.fn(() => mockContainerCredentials)
 }));
 
 jest.mock('../src/config/logger.js', () => ({
@@ -60,7 +60,7 @@ describe('PostgreSQL config', () => {
   it('uses a pooled query for its active healthcheck', async () => {
     const { Pool } = require('pg');
     const { Signer } = require('@aws-sdk/rds-signer');
-    const { fromContainerMetadata } = require('@aws-sdk/credential-providers');
+    const { fromHttp } = require('@aws-sdk/credential-providers');
     const fs = require('fs');
     mockQuery.mockResolvedValue({ rows: [{ '?column?': 1 }] });
     const { isPostgresHealthy } = require('../src/config/postgres.js');
@@ -71,7 +71,7 @@ describe('PostgreSQL config', () => {
     expect(Pool).toHaveBeenCalledWith(expect.objectContaining({
       ssl: { ca: Buffer.from('rds-ca-bundle'), rejectUnauthorized: true }
     }));
-    expect(fromContainerMetadata).toHaveBeenCalledTimes(1);
+    expect(fromHttp).toHaveBeenCalledTimes(1);
     expect(Signer).toHaveBeenCalledWith(expect.objectContaining({
       credentials: mockContainerCredentials
     }));
