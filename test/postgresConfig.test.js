@@ -3,6 +3,10 @@ const { describe, it, expect, beforeEach, afterEach } = require('@jest/globals')
 const mockQuery = jest.fn();
 const mockOn = jest.fn();
 
+jest.mock('fs', () => ({
+  readFileSync: jest.fn(() => Buffer.from('rds-ca-bundle'))
+}));
+
 jest.mock('pg', () => ({
   Pool: jest.fn(() => ({
     query: mockQuery,
@@ -32,6 +36,7 @@ describe('PostgreSQL config', () => {
     process.env.DB_USERNAME = 's3_app_user';
     process.env.DB_NAME = 's3-app';
     process.env.AWS_REGION = 'us-east-1';
+    process.env.DB_CA_CERT_PATH = '/mnt/rds-ca/global-bundle.pem';
   });
 
   afterEach(() => {
@@ -47,11 +52,17 @@ describe('PostgreSQL config', () => {
   });
 
   it('uses a pooled query for its active healthcheck', async () => {
+    const { Pool } = require('pg');
+    const fs = require('fs');
     mockQuery.mockResolvedValue({ rows: [{ '?column?': 1 }] });
     const { isPostgresHealthy } = require('../src/config/postgres.js');
 
     await expect(isPostgresHealthy()).resolves.toBe(true);
     expect(mockQuery).toHaveBeenCalledWith('SELECT 1');
+    expect(fs.readFileSync).toHaveBeenCalledWith('/mnt/rds-ca/global-bundle.pem');
+    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({
+      ssl: { ca: Buffer.from('rds-ca-bundle'), rejectUnauthorized: true }
+    }));
   });
 
   it('reports an unhealthy database when the health query fails', async () => {

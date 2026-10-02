@@ -3,7 +3,10 @@
 
 const { Pool } = require('pg');
 const { Signer } = require('@aws-sdk/rds-signer');
+const fs = require('fs');
 const logger = require('./logger');
+
+const DEFAULT_CA_BUNDLE_PATH = '/etc/ssl/certs/rds-ca-bundle.pem';
 
 let pool;
 let poolConfigurationKey;
@@ -15,12 +18,13 @@ const getPostgresConfiguration = () => {
   const user = process.env.DB_USERNAME;
   const database = process.env.DB_NAME;
   const region = process.env.AWS_REGION;
+  const caBundlePath = process.env.DB_CA_CERT_PATH || DEFAULT_CA_BUNDLE_PATH;
 
   if (!host || !user || !database || !region || !Number.isInteger(port) || port <= 0) {
     return null;
   }
 
-  return { host, port, user, database, region };
+  return { host, port, user, database, region, caBundlePath };
 };
 
 // Create or reuse a connection pool configured with IAM authentication.
@@ -39,6 +43,18 @@ const getPool = () => {
     pool.end().catch((error) => logger.warn('POSTGRES', 'Error closing replaced pool', error.message));
   }
 
+  let ca;
+  try {
+    ca = fs.readFileSync(configuration.caBundlePath);
+  } catch (error) {
+    logger.error('POSTGRES', 'Unable to read the RDS CA bundle', {
+      caBundlePath: configuration.caBundlePath,
+      errorCode: error.code,
+      errorMessage: error.message
+    });
+    return null;
+  }
+
   const signer = new Signer({
     hostname: configuration.host,
     port: configuration.port,
@@ -54,7 +70,7 @@ const getPool = () => {
     // pg invokes this callback when it opens a client, so every new connection
     // receives a freshly signed RDS IAM token.
     password: () => signer.getAuthToken(),
-    ssl: { rejectUnauthorized: true },
+    ssl: { ca, rejectUnauthorized: true },
     max: Number(process.env.DB_POOL_MAX || 10),
     // Close pooled connections after they remain unused for this duration.
     idleTimeoutMillis: Number(process.env.DB_POOL_IDLE_TIMEOUT_MS || 30000),
@@ -64,7 +80,21 @@ const getPool = () => {
   poolConfigurationKey = configurationKey;
 
   pool.on('error', (error) => {
-    logger.error('POSTGRES', 'Unexpected idle client error', error.message);
+    logger.error('POSTGRES', 'Unexpected idle client error', {
+      endpoint: configuration.host,
+      port: configuration.port,
+      database: configuration.database,
+      errorCode: error.code,
+      errorMessage: error.message
+    });
+  });
+
+  pool.on('connect', () => {
+    logger.info('POSTGRES', 'RDS PostgreSQL client connected', {
+      endpoint: configuration.host,
+      port: configuration.port,
+      database: configuration.database
+    });
   });
 
   return pool;
@@ -72,9 +102,15 @@ const getPool = () => {
 
 // Check database availability with a lightweight query.
 const isPostgresHealthy = async () => {
+  const configuration = getPostgresConfiguration();
   const activePool = getPool();
   if (!activePool) {
-    logger.error('POSTGRES', 'PostgreSQL configuration is incomplete.');
+    logger.error('POSTGRES', 'PostgreSQL configuration or CA bundle is unavailable.', {
+      endpoint: configuration?.host || 'not-set',
+      port: configuration?.port || 'not-set',
+      database: configuration?.database || 'not-set',
+      caBundlePath: configuration?.caBundlePath || 'not-set'
+    });
     return false;
   }
 
@@ -83,7 +119,14 @@ const isPostgresHealthy = async () => {
     await activePool.query('SELECT 1');
     return true;
   } catch (error) {
-    logger.warn('POSTGRES', 'PostgreSQL healthcheck failed', error.message);
+    logger.warn('POSTGRES', 'PostgreSQL healthcheck query failed', {
+      endpoint: configuration?.host || 'not-set',
+      port: configuration?.port || 'not-set',
+      database: configuration?.database || 'not-set',
+      errorName: error.name,
+      errorCode: error.code,
+      errorMessage: error.message
+    });
     return false;
   }
 };
@@ -92,9 +135,19 @@ const isPostgresHealthy = async () => {
 // degraded state so Kubernetes can surface dependency failures through health.
 const testPostgresConnection = async ({ retries = 3, delayMs = 2000 } = {}) => {
   for (let attempt = 1; attempt <= retries; attempt += 1) {
-    logger.info('POSTGRES', `Attempt ${attempt}/${retries}: testing RDS PostgreSQL access...`);
+    const configuration = getPostgresConfiguration();
+    logger.info('POSTGRES', `Attempt ${attempt}/${retries}: testing RDS PostgreSQL access...`, {
+      endpoint: configuration?.host || 'not-set',
+      port: configuration?.port || 'not-set',
+      database: configuration?.database || 'not-set',
+      caBundlePath: configuration?.caBundlePath || 'not-set'
+    });
     if (await isPostgresHealthy()) {
-      logger.info('POSTGRES', 'RDS PostgreSQL connection successful.');
+      logger.info('POSTGRES', 'RDS PostgreSQL connection successful', {
+        endpoint: configuration?.host,
+        port: configuration?.port,
+        database: configuration?.database
+      });
       return true;
     }
 

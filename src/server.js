@@ -168,8 +168,13 @@ const startServer = async () => {
       port: PORT,
       host: HOST,
       mongodbUriConfigured: Boolean(process.env.MONGODB_URI),
-      postgresConfigured: Boolean(process.env.DB_HOST && process.env.DB_USERNAME && process.env.DB_NAME),
-      awsBucketConfigured: Boolean(process.env.AWS_BUCKET_NAME),
+      postgres: {
+        configured: Boolean(process.env.DB_HOST && process.env.DB_USERNAME && process.env.DB_NAME),
+        endpoint: process.env.DB_HOST || 'not-set',
+        port: Number(process.env.DB_PORT || 5432),
+        database: process.env.DB_NAME || 'not-set'
+      },
+      awsBucketName: process.env.AWS_BUCKET_NAME || 'not-set',
       awsRegion: process.env.AWS_REGION || 'not-set',
       cloudFrontConfigured: Boolean(process.env.AWS_CLOUDFRONT_DOMAIN_NAME),
       cloudFrontDomainName: process.env.AWS_CLOUDFRONT_DOMAIN_NAME || 'not-set'
