@@ -1,6 +1,14 @@
 const postgres = require('../config/postgres');
 const logger = require('../config/logger');
 
+// Synthetic, read-only work keeps the load test independent of application
+// tables while exercising PostgreSQL CPU and temporary working memory.
+const TRAFFIC_QUERY = `
+  SELECT count(*) AS generated_rows,
+         sum(length(md5(value::text))) AS checksum
+  FROM generate_series(1, 50000) AS value
+`;
+
 const LIMITS = {
   minIntervalMs: 100,
   maxIntervalMs: 3_600_000,
@@ -48,7 +56,7 @@ const runQueries = async () => {
   runState.totalRuns += 1;
 
   const results = await Promise.allSettled(
-    Array.from({ length: runState.parallelQueries }, () => postgres.query('SELECT 1'))
+    Array.from({ length: runState.parallelQueries }, () => postgres.query(TRAFFIC_QUERY))
   );
 
   const failed = results.filter((result) => result.status === 'rejected');
