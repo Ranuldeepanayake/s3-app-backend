@@ -109,7 +109,7 @@ const findImageByIdentifier = async (identifier) => {
 
 // Upload sequence: accept the temp file, use the actual filename as the S3 key,
 // upload the bytes, delete the temp file, then save metadata for the object.
-router.post('/', imageWriteRateLimiter, upload.single('image'), async (req, res) => {
+router.post('/', authenticateToken, imageWriteRateLimiter, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No image file provided.' });
@@ -201,7 +201,7 @@ router.get('/:id', imageReadRateLimiter, async (req, res) => {
 
 // Update can rename metadata only, or replace the S3 object when a new file is
 // supplied. The old object is deleted before the new key is saved.
-router.put('/:id', imageWriteRateLimiter, upload.single('image'), async (req, res) => {
+router.put('/:id', authenticateToken, imageWriteRateLimiter, upload.single('image'), async (req, res) => {
   try {
     const image = await findImageByIdentifier(req.params.id);
 
