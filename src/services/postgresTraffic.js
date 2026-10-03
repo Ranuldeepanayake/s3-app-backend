@@ -17,7 +17,7 @@ const SCRATCH_QUERY = {
       md5(value::text) AS digest,
       substring(
         repeat(md5(value::text), ceil($2 / 32.0)::integer)
-        FROM 1 FOR $2
+        FROM 1 FOR $2::integer
       ) AS payload
     FROM generate_series(1, $1::integer) AS value
   `,
