@@ -305,7 +305,7 @@ router.delete('/delete-all', imageDeleteRateLimiter, authenticateToken, async (r
 });
 
 // Delete an image from S3 and its metadata from MongoDB.
-router.delete('/:id', imageDeleteRateLimiter, async (req, res) => {
+router.delete('/:id', authenticateToken, imageDeleteRateLimiter, async (req, res) => {
   try {
     const image = await findImageByIdentifier(req.params.id);
 
