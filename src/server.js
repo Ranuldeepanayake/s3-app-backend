@@ -15,6 +15,8 @@ const { router: authRouter, authenticateToken } = require('./routes/authRoutes')
 const { testS3Connection, isS3Healthy } = require('./config/s3');
 const { testPostgresConnection, isPostgresHealthy } = require('./config/postgres');
 const logger = require('./config/logger');
+const { version } = require('./config/application');
+const postgresTraffic = require('./services/postgresTraffic');
 
 const app = express();
 configureTrustProxy(app);
@@ -89,6 +91,7 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'S3 image CRUD API is running',
+    version,
     endpoints: {
       upload: 'POST /api/images',
       list: 'GET /api/images',
@@ -99,6 +102,10 @@ app.get('/', (req, res) => {
       protectedHealthcheck: 'GET /api/health/ready'
     }
   });
+});
+
+app.get('/api/version', (req, res) => {
+  res.json({ version });
 });
 
 app.get('/api/health/live', async (req, res) => {
@@ -121,6 +128,7 @@ app.get('/api/health/ready', authenticateToken, async (req, res) => {
     const payload = await checkHealth();
     return res.status(payload.status === 'ok' ? 200 : 503).json({
       ...payload,
+      version,
       container: {
         hostname: os.hostname(),
         ipAddress: getContainerIp()
@@ -138,6 +146,34 @@ app.get('/api/health/ready', authenticateToken, async (req, res) => {
       message: 'Healthcheck failed'
     });
   }
+});
+
+app.get('/api/health/traffic', authenticateToken, (req, res) => {
+  return res.json(postgresTraffic.getStatus());
+});
+
+app.post('/api/health/traffic/start', authenticateToken, (req, res) => {
+  try {
+    return res.status(202).json(postgresTraffic.start(req.body || {}));
+  } catch (error) {
+    return res.status(error.status || 400).json({ message: error.message });
+  }
+});
+
+app.post('/api/health/traffic/stop', authenticateToken, (req, res) => {
+  return res.json(postgresTraffic.stop());
+});
+
+app.post('/api/health/restart', authenticateToken, (req, res) => {
+  logger.warn('STARTUP', 'Backend restart requested through protected health controls');
+  res.status(202).json({
+    status: 'restart-requested',
+    message: 'Backend shutdown requested. A process supervisor must restart the service to run startup checks again.',
+    version
+  });
+
+  postgresTraffic.stop();
+  setTimeout(() => process.exit(0), 250);
 });
 
 app.use('/api/auth', authRouter);
