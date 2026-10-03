@@ -165,19 +165,28 @@ const startServer = async () => {
     logRateLimitConfiguration();
 
     logger.info('STARTUP', 'Resolved startup configuration', {
-      port: PORT,
-      host: HOST,
-      mongodbUriConfigured: Boolean(process.env.MONGODB_URI),
+      nodejs: {
+        host: HOST,
+        port: PORT
+      },
+      mongodb: {
+        uriConfigured: Boolean(process.env.MONGODB_URI)
+      },
       postgres: {
         configured: Boolean(process.env.DB_HOST && process.env.DB_USERNAME && process.env.DB_NAME),
         endpoint: process.env.DB_HOST || 'not-set',
         port: Number(process.env.DB_PORT || 5432),
-        database: process.env.DB_NAME || 'not-set'
+        database: process.env.DB_NAME || 'not-set',
+        caBundlePath: process.env.DB_CA_CERT_PATH || '/etc/ssl/certs/rds-ca-bundle.pem'
       },
-      awsBucketName: process.env.AWS_BUCKET_NAME || 'not-set',
-      awsRegion: process.env.AWS_REGION || 'not-set',
-      cloudFrontConfigured: Boolean(process.env.AWS_CLOUDFRONT_DOMAIN_NAME),
-      cloudFrontDomainName: process.env.AWS_CLOUDFRONT_DOMAIN_NAME || 'not-set'
+      s3: {
+        bucketName: process.env.AWS_BUCKET_NAME || 'not-set',
+        region: process.env.AWS_REGION || 'not-set'
+      },
+      cloudFront: {
+        configured: Boolean(process.env.AWS_CLOUDFRONT_DOMAIN_NAME),
+        domainName: process.env.AWS_CLOUDFRONT_DOMAIN_NAME || 'not-set'
+      },
     });
 
     await connectDB();

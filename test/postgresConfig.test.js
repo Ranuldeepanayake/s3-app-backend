@@ -83,4 +83,18 @@ describe('PostgreSQL config', () => {
 
     await expect(isPostgresHealthy()).resolves.toBe(false);
   });
+
+  it('logs only the database name for a successful startup connection', async () => {
+    const logger = require('../src/config/logger.js');
+    mockQuery.mockResolvedValue({ rows: [{ '?column?': 1 }] });
+    const { testPostgresConnection } = require('../src/config/postgres.js');
+
+    await expect(testPostgresConnection({ retries: 1 })).resolves.toBe(true);
+
+    expect(logger.info).toHaveBeenCalledWith(
+      'POSTGRES',
+      'RDS PostgreSQL connection successful',
+      { database: 's3-app' }
+    );
+  });
 });

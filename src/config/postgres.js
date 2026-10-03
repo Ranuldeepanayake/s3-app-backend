@@ -94,11 +94,7 @@ const getPool = () => {
   });
 
   pool.on('connect', () => {
-    logger.info('POSTGRES', 'RDS PostgreSQL client connected', {
-      endpoint: configuration.host,
-      port: configuration.port,
-      database: configuration.database
-    });
+    logger.info('POSTGRES', 'RDS PostgreSQL client connected', { database: configuration.database });
   });
 
   return pool;
@@ -147,11 +143,7 @@ const testPostgresConnection = async ({ retries = 3, delayMs = 2000 } = {}) => {
       caBundlePath: configuration?.caBundlePath || 'not-set'
     });
     if (await isPostgresHealthy()) {
-      logger.info('POSTGRES', 'RDS PostgreSQL connection successful', {
-        endpoint: configuration?.host,
-        port: configuration?.port,
-        database: configuration?.database
-      });
+      logger.info('POSTGRES', 'RDS PostgreSQL connection successful', { database: configuration?.database });
       return true;
     }
 
