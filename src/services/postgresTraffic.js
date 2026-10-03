@@ -9,11 +9,37 @@ const TRAFFIC_QUERY = `
   FROM generate_series(1, 50000) AS value
 `;
 
+const SCRATCH_QUERY = {
+  create: `
+    CREATE TEMP TABLE load_scratch ON COMMIT DROP AS
+    SELECT
+      value,
+      md5(value::text) AS digest,
+      substring(
+        repeat(md5(value::text), ceil($2 / 32.0)::integer)
+        FROM 1 FOR $2
+      ) AS payload
+    FROM generate_series(1, $1::integer) AS value
+  `,
+  index: 'CREATE INDEX load_scratch_digest_idx ON load_scratch (digest)',
+  aggregate: `
+    SELECT digest, count(*)
+    FROM load_scratch
+    GROUP BY digest
+    ORDER BY count(*) DESC
+  `
+};
+
 const LIMITS = {
   minIntervalMs: 100,
   maxIntervalMs: 3_600_000,
   minParallelQueries: 1,
-  maxParallelQueries: 100
+  maxParallelQueries: 100,
+  minScratchRows: 10_000,
+  maxScratchRows: 250_000,
+  minScratchBlobBytes: 256,
+  maxScratchBlobBytes: 8_192,
+  maxScratchParallelQueries: 4
 };
 
 let timer = null;
@@ -30,7 +56,7 @@ let state = {
   inFlight: false
 };
 
-const validateConfiguration = ({ intervalMs, parallelQueries }) => {
+const validateConfiguration = ({ intervalMs, parallelQueries, workload = 'light', scratchRows, scratchBlobBytes }) => {
   const interval = Number(intervalMs);
   const parallel = Number(parallelQueries);
 
@@ -42,7 +68,49 @@ const validateConfiguration = ({ intervalMs, parallelQueries }) => {
     return `Parallel queries must be a whole number between ${LIMITS.minParallelQueries} and ${LIMITS.maxParallelQueries}.`;
   }
 
+  if (!['light', 'scratch'].includes(workload)) {
+    return 'Workload must be either light or scratch.';
+  }
+
+  if (workload === 'scratch') {
+    if (parallel > LIMITS.maxScratchParallelQueries) {
+      return `Scratch workload parallel queries must not exceed ${LIMITS.maxScratchParallelQueries}.`;
+    }
+
+    const rows = Number(scratchRows);
+    const blobBytes = Number(scratchBlobBytes);
+    if (!Number.isInteger(rows) || rows < LIMITS.minScratchRows || rows > LIMITS.maxScratchRows) {
+      return `Scratch rows must be a whole number between ${LIMITS.minScratchRows} and ${LIMITS.maxScratchRows}.`;
+    }
+
+    if (!Number.isInteger(blobBytes) || blobBytes < LIMITS.minScratchBlobBytes || blobBytes > LIMITS.maxScratchBlobBytes) {
+      return `Scratch blob size must be a whole number between ${LIMITS.minScratchBlobBytes} and ${LIMITS.maxScratchBlobBytes} bytes.`;
+    }
+  }
+
   return null;
+};
+
+const runScratchTransaction = async ({ scratchRows, scratchBlobBytes }) => {
+  const pool = postgres.getPool();
+  if (!pool) {
+    throw new Error('PostgreSQL configuration is incomplete.');
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(SCRATCH_QUERY.create, [scratchRows, scratchBlobBytes]);
+    await client.query(SCRATCH_QUERY.index);
+    await client.query('ANALYZE load_scratch');
+    await client.query(SCRATCH_QUERY.aggregate);
+    await client.query('ROLLBACK');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 const runQueries = async () => {
@@ -55,8 +123,11 @@ const runQueries = async () => {
   runState.lastRunAt = new Date().toISOString();
   runState.totalRuns += 1;
 
+  const queryWork = runState.workload === 'scratch'
+    ? () => runScratchTransaction(runState)
+    : () => postgres.query(TRAFFIC_QUERY);
   const results = await Promise.allSettled(
-    Array.from({ length: runState.parallelQueries }, () => postgres.query(TRAFFIC_QUERY))
+    Array.from({ length: runState.parallelQueries }, queryWork)
   );
 
   const failed = results.filter((result) => result.status === 'rejected');
@@ -97,6 +168,9 @@ const start = (configuration) => {
     running: true,
     intervalMs: Number(configuration.intervalMs),
     parallelQueries: Number(configuration.parallelQueries),
+    workload: configuration.workload || 'light',
+    scratchRows: configuration.workload === 'scratch' ? Number(configuration.scratchRows) : null,
+    scratchBlobBytes: configuration.workload === 'scratch' ? Number(configuration.scratchBlobBytes) : null,
     startedAt: new Date().toISOString(),
     lastRunAt: null,
     totalRuns: 0,
@@ -116,7 +190,10 @@ const start = (configuration) => {
 
   logger.info('POSTGRES-TRAFFIC', 'PostgreSQL test traffic started', {
     intervalMs: state.intervalMs,
-    parallelQueries: state.parallelQueries
+    parallelQueries: state.parallelQueries,
+    workload: state.workload,
+    scratchRows: state.scratchRows,
+    scratchBlobBytes: state.scratchBlobBytes
   });
   return getStatus();
 };
