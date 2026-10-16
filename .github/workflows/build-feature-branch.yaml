@@ -197,7 +197,6 @@ jobs:
 
       # Authenticate to AWS using OIDC.
     - name: Configure AWS authentication
-      if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       uses: aws-actions/configure-aws-credentials@v5
       with:
         role-to-assume: ${{ env.AWS_ROLE_ARN }}
