@@ -197,7 +197,6 @@ jobs:
 
       #Print only the OIDC claims needed to diagnose the AWS trust-policy match.
     - name: Diagnose GitHub OIDC claims
-      if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
       run: |
         python3 - <<'PY'
         import base64
