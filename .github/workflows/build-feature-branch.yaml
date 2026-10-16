@@ -195,6 +195,36 @@ jobs:
     #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     #     aws-region: ${{ env.AWS_REGION }}
 
+      #Print only the OIDC claims needed to diagnose the AWS trust-policy match.
+    - name: Diagnose GitHub OIDC claims
+      if: ${{ env.INPUT_ACTION == 'build-and-deploy' }}
+      run: |
+        python3 - <<'PY'
+        import base64
+        import json
+        import os
+        from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+        from urllib.request import Request, urlopen
+
+        parts = urlsplit(os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"])
+        query = dict(parse_qsl(parts.query))
+        query["audience"] = "sts.amazonaws.com"
+        url = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+        request = Request(
+            url,
+            headers={"Authorization": f"Bearer {os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']}"},
+        )
+
+        with urlopen(request) as response:
+            token = json.load(response)["value"]
+
+        encoded_payload = token.split(".")[1]
+        payload = base64.urlsafe_b64decode(encoded_payload + "=" * (-len(encoded_payload) % 4))
+        claims = json.loads(payload)
+        print(f"OIDC sub: {claims.get('sub')!r}")
+        print(f"OIDC aud: {claims.get('aud')!r}")
+        PY
+
       # Authenticate to AWS using OIDC.
     - name: Configure AWS authentication
       uses: aws-actions/configure-aws-credentials@v5
