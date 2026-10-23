@@ -54,6 +54,7 @@ env:
 permissions:
   contents: write
   pull-requests: write
+  id-token: write
 
 jobs:
   build-release-branch:

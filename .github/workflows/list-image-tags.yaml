@@ -33,6 +33,7 @@ env:
 #Permissions.
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   list-image-tags:
