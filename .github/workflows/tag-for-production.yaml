@@ -27,6 +27,7 @@ env:
 #Permissions.
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   tag-for-production:
