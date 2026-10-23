@@ -3,17 +3,14 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { createApiRateLimiter } = require('../config/rateLimit.js');
+const postgres = require('../config/postgres.js');
 
 const router = express.Router();
 
 // Strict rate limiting for login attempts to prevent brute force attacks.
 const loginRateLimiter = createApiRateLimiter('AUTH_LOGIN');
 
-// Credentials are environment-driven for this demo API. Override every default
-// below before exposing the service outside local development.
 const getJwtSecret = () => process.env.JWT_SECRET || 'change-me';
-const authUsername = process.env.AUTH_USERNAME || 'admin';
-const authPassword = process.env.AUTH_PASSWORD || 'admin123';
 const tokenExpiration = process.env.JWT_EXPIRATION || '12h';
 
 // Middleware to authenticate requests using JWT bearer tokens. Successful
@@ -36,13 +33,35 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Login compares the submitted credentials with the configured values and
-// returns a short-lived admin token for protected routes.
-router.post('/login', loginRateLimiter, (req, res) => {
+// Login uses a parameterized query against PostgreSQL. Passwords are plaintext
+// only because this application's requested database contract requires it.
+router.post('/login', loginRateLimiter, async (req, res) => {
   const { username, password } = req.body || {};
 
-  if (username === authUsername && password === authPassword) {
-    const token = jwt.sign({ username, role: 'admin' }, getJwtSecret(), {
+  if (!username || !password) {
+    return res.status(401).json({ message: 'Invalid credentials.' });
+  }
+
+  try {
+    const result = await postgres.query(
+      `SELECT user_id, user_name, first_name
+       FROM public.app_users
+       WHERE user_name = $1 AND password = $2
+       LIMIT 1`,
+      [username, password]
+    );
+    const user = result.rows[0];
+
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid credentials.' });
+    }
+
+    const token = jwt.sign({
+      userId: user.user_id,
+      username: user.user_name,
+      firstName: user.first_name,
+      role: 'admin'
+    }, getJwtSecret(), {
       expiresIn: tokenExpiration
     });
 
@@ -50,9 +69,11 @@ router.post('/login', loginRateLimiter, (req, res) => {
       message: 'Login successful.',
       token
     });
+  } catch (error) {
+    return res.status(503).json({
+      message: 'Authentication service is unavailable. Please try again later.'
+    });
   }
-
-  return res.status(401).json({ message: 'Invalid credentials.' });
 });
 
 router.get('/test-protected', authenticateToken, (req, res) => {

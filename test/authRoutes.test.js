@@ -2,7 +2,12 @@ const { describe, it, expect, beforeAll, afterAll } = require('@jest/globals');
 const http = require('http');
 const jwt = require('jsonwebtoken');
 
+jest.mock('../src/config/postgres.js', () => ({
+  query: jest.fn()
+}));
+
 const { router, authenticateToken } = require('../src/routes/authRoutes.js');
+const postgres = require('../src/config/postgres.js');
 
 const requestJson = (server, path, options = {}) => new Promise((resolve, reject) => {
   const requestOptions = {
@@ -57,6 +62,12 @@ describe('auth routes', () => {
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   });
 
+  beforeEach(() => {
+    postgres.query.mockResolvedValue({
+      rows: [{ user_id: 7, user_name: 'admin', first_name: 'Admin' }]
+    });
+  });
+
   afterAll(async () => {
     if (server) {
       await new Promise((resolve) => server.close(resolve));
@@ -75,9 +86,14 @@ describe('auth routes', () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toHaveProperty('token');
     expect(typeof response.body.token).toBe('string');
+    expect(postgres.query).toHaveBeenCalledWith(
+      expect.stringContaining('FROM public.app_users'),
+      ['admin', 'admin123']
+    );
   });
 
   it('rejects invalid credentials', async () => {
+    postgres.query.mockResolvedValue({ rows: [] });
     const response = await requestJson(server, '/api/auth/login', {
       method: 'POST',
       body: {
@@ -88,6 +104,18 @@ describe('auth routes', () => {
 
     expect(response.statusCode).toBe(401);
     expect(response.body.message).toBe('Invalid credentials.');
+  });
+
+  it('returns service unavailable when PostgreSQL cannot be queried', async () => {
+    postgres.query.mockRejectedValue(new Error('RDS unavailable'));
+
+    const response = await requestJson(server, '/api/auth/login', {
+      method: 'POST',
+      body: { username: 'admin', password: 'admin123' }
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.body.message).toBe('Authentication service is unavailable. Please try again later.');
   });
 
   it('allows requests with a valid bearer token', () => {

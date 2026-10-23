@@ -8,13 +8,18 @@ const os = require('os');
 const mongoose = require('mongoose');
 const multer = require('multer');
 const connectDB = require('./config/db');
+const { configureTrustProxy } = require('./config/trustProxy');
 const { createApiRateLimiter, logRateLimitConfiguration } = require('./config/rateLimit');
 const imageRoutes = require('./routes/imageRoutes');
 const { router: authRouter, authenticateToken } = require('./routes/authRoutes');
 const { testS3Connection, isS3Healthy } = require('./config/s3');
+const { testPostgresConnection, isPostgresHealthy } = require('./config/postgres');
 const logger = require('./config/logger');
+const { version } = require('./config/application');
+const postgresTraffic = require('./services/postgresTraffic');
 
 const app = express();
+configureTrustProxy(app);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -41,23 +46,77 @@ const getContainerIp = () => {
   return 'unknown';
 };
 
+const getMongoDetails = () => {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    return {
+      endpoint: 'not-set',
+      port: 'not-set',
+      userName: 'not-set',
+      dbName: 'not-set'
+    };
+  }
+
+  try {
+    const parsed = new URL(uri);
+    return {
+      endpoint: parsed.hostname || 'not-set',
+      port: parsed.port || (parsed.protocol === 'mongodb+srv:' ? 'default' : '27017'),
+      userName: parsed.username ? decodeURIComponent(parsed.username) : 'not-set',
+      dbName: parsed.pathname.replace(/^\//, '').split('?')[0] || 'not-set'
+    };
+  } catch (error) {
+    return {
+      endpoint: 'configured-but-unparseable',
+      port: 'not-set',
+      userName: 'not-set',
+      dbName: 'not-set'
+    };
+  }
+};
+
 // Health checks intentionally verify both external dependencies. A degraded
 // response means the process is alive, but image operations may not succeed.
-const checkHealth = async () => {
-  const [mongoHealthy, s3Healthy] = await Promise.all([
+const checkHealth = async ({ includeDetails = false } = {}) => {
+  const [mongoHealthy, s3Healthy, postgresHealthy] = await Promise.all([
     require('./config/db').isMongoHealthy(),
-    isS3Healthy()
+    isS3Healthy(),
+    isPostgresHealthy()
   ]);
 
-  return {
-    status: mongoHealthy && s3Healthy ? 'ok' : 'degraded',
+  const payload = {
+    status: mongoHealthy && s3Healthy && postgresHealthy ? 'ok' : 'degraded',
     mongodb: {
       status: mongoHealthy ? 'up' : 'down'
     },
     s3: {
       status: s3Healthy ? 'up' : 'down'
-    }
+    },
+    postgresql: {
+      status: postgresHealthy ? 'up' : 'down'
+    },
   };
+
+  if (includeDetails) {
+    payload.mongodb = { ...payload.mongodb, ...getMongoDetails() };
+    payload.s3 = {
+      ...payload.s3,
+      bucketName: process.env.AWS_BUCKET_NAME || 'not-set'
+    };
+    payload.postgresql = {
+      ...payload.postgresql,
+      endpoint: process.env.DB_HOST || 'not-set',
+      port: Number(process.env.DB_PORT || 5432),
+      dbName: process.env.DB_NAME || 'not-set',
+      dbUser: process.env.DB_USERNAME || 'not-set',
+      caBundlePath: process.env.DB_CA_CERT_PATH || '/etc/ssl/certs/rds-ca-bundle.pem'
+    };
+    payload.cloudfront = {
+      domainName: process.env.AWS_CLOUDFRONT_DOMAIN_NAME || 'not-set'
+    };
+  }
+
+  return payload;
 };
 
 // Allow browser-based requests from the React frontend during local development.
@@ -82,6 +141,7 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
   res.json({
     message: 'S3 image CRUD API is running',
+    version,
     endpoints: {
       upload: 'POST /api/images',
       list: 'GET /api/images',
@@ -92,6 +152,10 @@ app.get('/', (req, res) => {
       protectedHealthcheck: 'GET /api/health/ready'
     }
   });
+});
+
+app.get('/api/version', (req, res) => {
+  res.json({ version });
 });
 
 app.get('/api/health/live', async (req, res) => {
@@ -111,18 +175,15 @@ app.get('/api/health/live', async (req, res) => {
 // infrastructure configuration such as bucket, region, and CloudFront domain.
 app.get('/api/health/ready', authenticateToken, async (req, res) => {
   try {
-    const payload = await checkHealth();
+    const payload = await checkHealth({ includeDetails: true });
     return res.status(payload.status === 'ok' ? 200 : 503).json({
       ...payload,
+      version,
       container: {
         hostname: os.hostname(),
         ipAddress: getContainerIp()
       },
-      aws: {
-        region: process.env.AWS_REGION || 'not-set',
-        bucketName: process.env.AWS_BUCKET_NAME || 'not-set',
-        cloudFrontDomainName: process.env.AWS_CLOUDFRONT_DOMAIN_NAME || 'not-set'
-      }
+      aws: { region: process.env.AWS_REGION || 'not-set' }
     });
   } catch (error) {
     logger.error('HEALTH', 'Protected healthcheck failed', error.message);
@@ -131,6 +192,34 @@ app.get('/api/health/ready', authenticateToken, async (req, res) => {
       message: 'Healthcheck failed'
     });
   }
+});
+
+app.get('/api/health/traffic', authenticateToken, (req, res) => {
+  return res.json(postgresTraffic.getStatus());
+});
+
+app.post('/api/health/traffic/start', authenticateToken, (req, res) => {
+  try {
+    return res.status(202).json(postgresTraffic.start(req.body || {}));
+  } catch (error) {
+    return res.status(error.status || 400).json({ message: error.message });
+  }
+});
+
+app.post('/api/health/traffic/stop', authenticateToken, (req, res) => {
+  return res.json(postgresTraffic.stop());
+});
+
+app.post('/api/health/restart', authenticateToken, (req, res) => {
+  logger.warn('STARTUP', 'Backend restart requested through protected health controls');
+  res.status(202).json({
+    status: 'restart-requested',
+    message: 'Backend shutdown requested. A process supervisor must restart the service to run startup checks again.',
+    version
+  });
+
+  postgresTraffic.stop();
+  setTimeout(() => process.exit(0), 250);
 });
 
 app.use('/api/auth', authRouter);
@@ -158,20 +247,42 @@ const startServer = async () => {
     logRateLimitConfiguration();
 
     logger.info('STARTUP', 'Resolved startup configuration', {
-      port: PORT,
-      host: HOST,
-      mongodbUriConfigured: Boolean(process.env.MONGODB_URI),
-      awsBucketConfigured: Boolean(process.env.AWS_BUCKET_NAME),
-      awsRegion: process.env.AWS_REGION || 'not-set',
-      cloudFrontConfigured: Boolean(process.env.AWS_CLOUDFRONT_DOMAIN_NAME),
-      cloudFrontDomainName: process.env.AWS_CLOUDFRONT_DOMAIN_NAME || 'not-set'
+      nodejs: {
+        host: HOST,
+        port: PORT
+      },
+      mongodb: {
+        uriConfigured: Boolean(process.env.MONGODB_URI)
+      },
+      postgres: {
+        configured: Boolean(process.env.DB_HOST && process.env.DB_USERNAME && process.env.DB_NAME),
+        endpoint: process.env.DB_HOST || 'not-set',
+        port: Number(process.env.DB_PORT || 5432),
+        database: process.env.DB_NAME || 'not-set',
+        caBundlePath: process.env.DB_CA_CERT_PATH || '/etc/ssl/certs/rds-ca-bundle.pem'
+      },
+      s3: {
+        bucketName: process.env.AWS_BUCKET_NAME || 'not-set',
+        region: process.env.AWS_REGION || 'not-set'
+      },
+      cloudFront: {
+        configured: Boolean(process.env.AWS_CLOUDFRONT_DOMAIN_NAME),
+        domainName: process.env.AWS_CLOUDFRONT_DOMAIN_NAME || 'not-set'
+      },
     });
 
     await connectDB();
 
-    const s3Ready = await testS3Connection();
+    const [s3Ready, postgresReady] = await Promise.all([
+      testS3Connection(),
+      testPostgresConnection()
+    ]);
     if (!s3Ready) {
       logger.warn('STARTUP', 'S3 connection unavailable, but continuing startup.');
+    }
+
+    if (!postgresReady) {
+      logger.warn('STARTUP', 'RDS PostgreSQL unavailable, but continuing startup.');
     }
 
     app.listen(PORT, HOST, () => {

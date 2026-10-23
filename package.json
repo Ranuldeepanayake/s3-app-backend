@@ -1,6 +1,6 @@
 {
   "name": "s3-app-backend",
-  "version": "1.25.0",
+  "version": "1.27.0-rc.1",
   "description": "Express CRUD API for uploading images to AWS S3 with MongoDB metadata",
   "main": "src/server.js",
   "scripts": {
@@ -11,12 +11,15 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.621.0",
+    "@aws-sdk/credential-providers": "^3.1145.0",
+    "@aws-sdk/rds-signer": "^3.621.0",
     "dotenv": "^16.4.0",
     "express": "^4.19.0",
     "express-rate-limit": "^7.1.5",
     "jsonwebtoken": "^9.0.1",
     "mongoose": "^8.9.0",
     "multer": "^1.4.5-lts.2",
+    "pg": "^8.12.0",
     "uuid": "^11.0.0"
   },
   "devDependencies": {
