@@ -119,6 +119,37 @@ Use Docker Compose (builds and deploys both the backend and frontend):
 docker compose up -d --build
 ```
 
+## Kubernetes
+If deploying on kubernetes, the below secrets must be created with the appropriate values.
+
+# The below secret includes general environment variables required by the service.
+kubectl create secret generic app-credentials \
+  --namespace= \
+  --from-literal=AWS_ACCESS_KEY_ID= \
+  --from-literal=AWS_BUCKET_NAME= \
+  --from-literal=AWS_REGION= \
+  --from-literal=AWS_SECRET_ACCESS_KEY= \
+  --from-literal=JWT_SECRET= \
+  --from-literal=MONGODB_URI=	\
+  --from-literal=DB_HOST= \
+  --from-literal=DB_PORT= \
+  --from-literal=DB_USERNAME= \
+  --from-literal=DB_NAME=
+
+# The below secret is required if the RDS connection uses TLS which needs the AWS RDS CA bundle.  
+kubectl create secret generic rds-ca-bundle --from-file=rds-ca-bundle.pem=./aws-rds-ca.pem -n s3-app-dev
+
+# The below secret is only required if the Kubernetes cluster does not have access to the relevant ECR repositories and the ECR token generation
+# Kubernetes cron job is enabled.
+kubectl create secret generic aws-ecr-credentials \
+  --namespace= \
+  --from-literal=AWS_ACCESS_KEY_ID= \
+  --from-literal=AWS_SECRET_ACCESS_KEY= \
+  --from-literal=AWS_REGION= \
+  --from-literal=AWS_ACCOUNT_ID= \
+  --from-literal=AWS_ECR_SECRET_NAME= \
+  --from-literal=SECRET_NAMESPACE=
+
 ## Logging
 
 The application logs timestamped messages with component labels such as:
