@@ -15,3 +15,7 @@
 - Validation limitation: tests ran under Node 20.15.0, below the newly declared Node >=22 engine; the installed AWS SDK emitted its forward-compatibility warning. No Docker build or live provider checks were run.
 - Remote synchronization could not be performed: `git fetch origin` was denied access to `.git/FETCH_HEAD` by the environment. No pull or repository metadata changes were made.
 - Next action: use Node 22 or 24 for supported local validation, and fetch/pull when Git metadata permissions allow.
+
+## Deferred plan
+
+- The agreed Playwright Kubernetes smoke-test plan is saved in `.agent/playwright-kubernetes-smoke-tests-plan.md`. It covers the dev Argo CD PostSync Job, separate versioned Playwright runner image, API and real frontend-origin CORS checks, and GitOps/CORS updates.
