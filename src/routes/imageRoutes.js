@@ -163,8 +163,8 @@ router.post('/', authenticateToken, imageWriteRateLimiter, upload.single('image'
       image: response
     });
   } catch (error) {
-    logger.error('ROUTES', 'Upload error', error.message);
-    res.status(500).json({ message: 'Failed to upload image.', error: error.message });
+    logger.error('ROUTES', 'Upload error', error);
+    res.status(500).json({ message: 'Failed to upload image.' });
   }
 });
 
@@ -176,8 +176,8 @@ router.get('/', imageReadRateLimiter, async (req, res) => {
 
     res.json(serialized);
   } catch (error) {
-    logger.error('ROUTES', 'List images error', error.message);
-    res.status(500).json({ message: 'Failed to fetch images.', error: error.message });
+    logger.error('ROUTES', 'List images error', error);
+    res.status(500).json({ message: 'Failed to fetch images.' });
   }
 });
 
@@ -194,8 +194,8 @@ router.get('/:id', imageReadRateLimiter, async (req, res) => {
 
     res.json(response);
   } catch (error) {
-    logger.error('ROUTES', 'Get image error', error.message);
-    res.status(500).json({ message: 'Failed to fetch image.', error: error.message });
+    logger.error('ROUTES', 'Get image error', error);
+    res.status(500).json({ message: 'Failed to fetch image.' });
   }
 });
 
@@ -268,8 +268,8 @@ router.put('/:id', authenticateToken, imageWriteRateLimiter, upload.single('imag
       image: response
     });
   } catch (error) {
-    logger.error('ROUTES', 'Update image error', error.message);
-    res.status(500).json({ message: 'Failed to update image.', error: error.message });
+    logger.error('ROUTES', 'Update image error', error);
+    res.status(500).json({ message: 'Failed to update image.' });
   }
 });
 
@@ -288,7 +288,7 @@ router.delete('/delete-all', imageDeleteRateLimiter, authenticateToken, async (r
           })
         );
       } catch (error) {
-        logger.warn('ROUTES', `Skipping S3 delete for ${image.fileName || image.name}`, error.message);
+        logger.warn('ROUTES', 'Skipping S3 delete for an image', error);
       }
     }));
 
@@ -299,8 +299,8 @@ router.delete('/delete-all', imageDeleteRateLimiter, authenticateToken, async (r
       deletedCount: images.length
     });
   } catch (error) {
-    logger.error('ROUTES', 'Delete all images error', error.message);
-    res.status(500).json({ message: 'Failed to delete all images.', error: error.message });
+    logger.error('ROUTES', 'Delete all images error', error);
+    res.status(500).json({ message: 'Failed to delete all images.' });
   }
 });
 
@@ -324,8 +324,8 @@ router.delete('/:id', authenticateToken, imageDeleteRateLimiter, async (req, res
 
     res.json({ message: 'Image deleted successfully.', id: image.imageId });
   } catch (error) {
-    logger.error('ROUTES', 'Delete image error', error.message);
-    res.status(500).json({ message: 'Failed to delete image.', error: error.message });
+    logger.error('ROUTES', 'Delete image error', error);
+    res.status(500).json({ message: 'Failed to delete image.' });
   }
 });
 

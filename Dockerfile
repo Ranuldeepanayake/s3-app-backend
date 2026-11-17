@@ -1,6 +1,6 @@
 FROM node:24-alpine
 
-#Change the working directory.
+# Keep application files in one predictable container directory.
 WORKDIR /usr/src/app
 
 #Build argument (default false).
@@ -26,6 +26,11 @@ ENV NODE_ENV=production
 COPY src ./src
 COPY test ./test
 
+# The upload handler writes temporary files under src/tmp; prepare that path for
+# the unprivileged runtime user before dropping root privileges.
+RUN mkdir -p /usr/src/app/src/tmp \
+    && chown -R node:node /usr/src/app/src/tmp
+
 #Run tests only if enabled.
 RUN if [ "$RUN_TESTS" = "true" ]; then \
       echo "Running tests..."; \
@@ -35,5 +40,11 @@ RUN if [ "$RUN_TESTS" = "true" ]; then \
 #Listening port metadata.
 EXPOSE 3100
 
-#Run process.
+# Probe the cheap root endpoint so external dependency outages do not cause the
+# container runtime to restart an API that intentionally supports degraded mode.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
+  CMD node -e "require('http').get('http://127.0.0.1:3100/', response => process.exit(response.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+
+# Run the API without container root privileges.
+USER node
 CMD ["npm", "start"]

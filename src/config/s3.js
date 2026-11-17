@@ -27,7 +27,7 @@ const isS3Healthy = async () => {
     await s3Client.send(new HeadBucketCommand({ Bucket: bucketName }));
     return true;
   } catch (error) {
-    logger.warn('S3', 'S3 healthcheck failed', error.message);
+    logger.warn('S3', 'S3 healthcheck failed', error);
     return false;
   }
 };
@@ -52,7 +52,7 @@ const testS3Connection = async ({ retries = 3, delayMs = 2000 } = {}) => {
       logger.info('S3', `Connection successful for bucket "${bucketName}".`);
       return true;
     } catch (error) {
-      logger.error('S3', `Attempt ${attempt}/${retries} failed`, error.message);
+      logger.error('S3', `Attempt ${attempt}/${retries} failed`, error);
       if (attempt < retries) {
         logger.info('S3', `Retrying in ${delayMs / 1000}s...`);
         await new Promise((resolve) => setTimeout(resolve, delayMs));

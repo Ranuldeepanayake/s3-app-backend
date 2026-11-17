@@ -4,6 +4,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const { createApiRateLimiter } = require('../config/rateLimit.js');
 const postgres = require('../config/postgres.js');
+const logger = require('../config/logger.js');
 
 const router = express.Router();
 
@@ -20,11 +21,13 @@ const authenticateToken = (req, res, next) => {
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
 
   if (!token) {
+    logger.warn('AUTH', 'Authentication rejected', { reason: 'missing_token' });
     return res.status(401).json({ message: 'Authentication token is required.' });
   }
 
   jwt.verify(token, getJwtSecret(), (error, payload) => {
     if (error) {
+      logger.warn('AUTH', 'Authentication rejected', { reason: 'invalid_or_expired_token' });
       return res.status(403).json({ message: 'Invalid or expired token.' });
     }
 
@@ -39,6 +42,7 @@ router.post('/login', loginRateLimiter, async (req, res) => {
   const { username, password } = req.body || {};
 
   if (!username || !password) {
+    logger.warn('AUTH', 'Login rejected', { reason: 'missing_credentials' });
     return res.status(401).json({ message: 'Invalid credentials.' });
   }
 
@@ -53,6 +57,7 @@ router.post('/login', loginRateLimiter, async (req, res) => {
     const user = result.rows[0];
 
     if (!user) {
+      logger.warn('AUTH', 'Login rejected', { reason: 'invalid_credentials' });
       return res.status(401).json({ message: 'Invalid credentials.' });
     }
 
@@ -70,6 +75,7 @@ router.post('/login', loginRateLimiter, async (req, res) => {
       token
     });
   } catch (error) {
+    logger.error('AUTH', 'Login query failed', error);
     return res.status(503).json({
       message: 'Authentication service is unavailable. Please try again later.'
     });

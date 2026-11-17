@@ -6,6 +6,12 @@ jest.mock('../src/config/postgres.js', () => ({
   query: jest.fn()
 }));
 
+jest.mock('../src/config/logger.js', () => ({
+  warn: jest.fn(),
+  info: jest.fn(),
+  error: jest.fn()
+}));
+
 const { router, authenticateToken } = require('../src/routes/authRoutes.js');
 const postgres = require('../src/config/postgres.js');
 

@@ -1,0 +1,15 @@
+# Keep local credentials and development-only files out of the Docker context.
+.env
+.env.*
+!.env.example
+node_modules/
+npm-debug.log*
+coverage/
+reports/
+tmp/
+.git/
+.github/
+.vscode/
+.idea/
+.DS_Store
+*.log

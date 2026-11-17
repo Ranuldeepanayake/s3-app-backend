@@ -37,7 +37,8 @@ const createApiRateLimiter = (moduleName = 'API') => {
         {
           ip: clientIp,
           method: req.method,
-          path: req.originalUrl,
+          // Exclude query parameters because URLs can carry sensitive values.
+          path: req.route?.path ? `${req.baseUrl}${req.route.path}` : 'unmatched',
           module: moduleName
         }
       );

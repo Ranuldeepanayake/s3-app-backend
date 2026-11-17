@@ -13,10 +13,12 @@ const { createApiRateLimiter, logRateLimitConfiguration } = require('./config/ra
 const imageRoutes = require('./routes/imageRoutes');
 const { router: authRouter, authenticateToken } = require('./routes/authRoutes');
 const { testS3Connection, isS3Healthy } = require('./config/s3');
-const { testPostgresConnection, isPostgresHealthy } = require('./config/postgres');
+const { testPostgresConnection, isPostgresHealthy, closePostgresPool } = require('./config/postgres');
 const logger = require('./config/logger');
 const { version } = require('./config/application');
 const postgresTraffic = require('./services/postgresTraffic');
+const { parseAllowedOrigins, createCorsMiddleware } = require('./config/cors');
+const { randomUUID } = require('crypto');
 
 const app = express();
 configureTrustProxy(app);
@@ -25,7 +27,6 @@ app.use(express.urlencoded({ extended: true }));
 
 // Apply global rate limiting to all API routes.
 const globalRateLimiter = createApiRateLimiter('GLOBAL_API');
-app.use('/api/', globalRateLimiter);
 
 const PORT = Number(process.env.PORT || process.env.API_PORT || 3100);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -62,7 +63,7 @@ const getMongoDetails = () => {
     return {
       endpoint: parsed.hostname || 'not-set',
       port: parsed.port || (parsed.protocol === 'mongodb+srv:' ? 'default' : '27017'),
-      userName: parsed.username ? decodeURIComponent(parsed.username) : 'not-set',
+      userName: parsed.username ? '[configured]' : 'not-set',
       dbName: parsed.pathname.replace(/^\//, '').split('?')[0] || 'not-set'
     };
   } catch (error) {
@@ -74,6 +75,60 @@ const getMongoDetails = () => {
     };
   }
 };
+
+let httpServer;
+let shutdownPromise;
+
+/**
+ * Stops accepting traffic and closes background and database resources.
+ * @param {string} reason Signal or operator action that started shutdown.
+ * @returns {Promise<void>} Resolves after available cleanup has completed.
+ */
+const shutdown = (reason) => {
+  if (shutdownPromise) {
+    return shutdownPromise;
+  }
+
+  shutdownPromise = (async () => {
+    logger.info('SHUTDOWN', 'Graceful shutdown started', { reason });
+    postgresTraffic.stop();
+    require('./config/db').clearReconnectTimers();
+
+    const listenerResult = await Promise.allSettled([
+      new Promise((resolve, reject) => {
+        if (!httpServer) {
+          resolve();
+          return;
+        }
+        httpServer.close((error) => (error ? reject(error) : resolve()));
+      })
+    ]);
+    // Let in-flight handlers finish before disconnecting their dependencies.
+    const dependencyResults = await Promise.allSettled([
+      mongoose.disconnect(),
+      closePostgresPool()
+    ]);
+    const results = [...listenerResult, ...dependencyResults];
+    const failures = results.filter((result) => result.status === 'rejected');
+
+    if (failures.length > 0) {
+      logger.error('SHUTDOWN', 'One or more resources did not close cleanly', {
+        failures: failures.map((result) => result.reason)
+      });
+      process.exitCode = 1;
+    }
+
+    logger.info('SHUTDOWN', 'Graceful shutdown completed', {
+      reason,
+      failedResources: failures.length
+    });
+  })();
+
+  return shutdownPromise;
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 // Health checks intentionally verify both external dependencies. A degraded
 // response means the process is alive, but image operations may not succeed.
@@ -119,24 +174,33 @@ const checkHealth = async ({ includeDetails = false } = {}) => {
   return payload;
 };
 
-// Allow browser-based requests from the React frontend during local development.
+// Add a correlation ID and log completed request metadata without the raw URL,
+// which could contain credentials or other sensitive query parameters.
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(204);
-  }
-
+  const requestId = randomUUID();
+  const startedAt = process.hrtime.bigint();
+  res.set('X-Request-Id', requestId);
+  res.on('finish', () => {
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
+    const routePath = req.route?.path
+      ? `${req.baseUrl}${req.route.path}`
+      : 'unmatched';
+    logger.info('HTTP', 'Request completed', {
+      requestId,
+      method: req.method,
+      path: routePath,
+      status: res.statusCode,
+      durationMs: Math.round(durationMs * 100) / 100
+    });
+  });
   next();
 });
 
-// Log each incoming HTTP request with a timestamp and request method.
-app.use((req, res, next) => {
-  logger.info('HTTP', `${req.method} ${req.originalUrl}`);
-  next();
-});
+// Apply origin policy before rate limiting and route handlers so rejected
+// browser origins cannot consume API work or receive application responses.
+const allowedCorsOrigins = parseAllowedOrigins(process.env.CORS_ALLOWED_ORIGINS);
+app.use(createCorsMiddleware(allowedCorsOrigins));
+app.use('/api/', globalRateLimiter);
 
 app.get('/', (req, res) => {
   res.json({
@@ -163,7 +227,7 @@ app.get('/api/health/live', async (req, res) => {
     const payload = await checkHealth();
     return res.status(payload.status === 'ok' ? 200 : 503).json(payload);
   } catch (error) {
-    logger.error('HEALTH', 'Unprotected healthcheck failed', error.message);
+    logger.error('HEALTH', 'Unprotected healthcheck failed', error);
     return res.status(503).json({
       status: 'error',
       message: 'Healthcheck failed'
@@ -186,7 +250,7 @@ app.get('/api/health/ready', authenticateToken, async (req, res) => {
       aws: { region: process.env.AWS_REGION || 'not-set' }
     });
   } catch (error) {
-    logger.error('HEALTH', 'Protected healthcheck failed', error.message);
+    logger.error('HEALTH', 'Protected healthcheck failed', error);
     return res.status(503).json({
       status: 'error',
       message: 'Healthcheck failed'
@@ -202,6 +266,7 @@ app.post('/api/health/traffic/start', authenticateToken, (req, res) => {
   try {
     return res.status(202).json(postgresTraffic.start(req.body || {}));
   } catch (error) {
+    logger.warn('API', 'PostgreSQL traffic configuration rejected', error);
     return res.status(error.status || 400).json({ message: error.message });
   }
 });
@@ -218,8 +283,7 @@ app.post('/api/health/restart', authenticateToken, (req, res) => {
     version
   });
 
-  postgresTraffic.stop();
-  setTimeout(() => process.exit(0), 250);
+  setTimeout(() => shutdown('protected restart request'), 250);
 });
 
 app.use('/api/auth', authRouter);
@@ -247,6 +311,16 @@ const startServer = async () => {
     logRateLimitConfiguration();
 
     logger.info('STARTUP', 'Resolved startup configuration', {
+      service: 's3-app-backend',
+      version,
+      environment: process.env.NODE_ENV || 'development',
+      jwtSecretConfigured: Boolean(process.env.JWT_SECRET),
+      staticAwsCredentialsConfigured: Boolean(
+        process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
+      ),
+      cors: {
+        allowedOrigins: allowedCorsOrigins
+      },
       nodejs: {
         host: HOST,
         port: PORT
@@ -285,11 +359,12 @@ const startServer = async () => {
       logger.warn('STARTUP', 'RDS PostgreSQL unavailable, but continuing startup.');
     }
 
-    app.listen(PORT, HOST, () => {
+    httpServer = app.listen(PORT, HOST, () => {
       logger.info('STARTUP', `Server running on http://${HOST}:${PORT}`);
     });
   } catch (error) {
-    logger.error('STARTUP', 'Failed to start server', error.message);
+    logger.error('STARTUP', 'Failed to start server', error);
+    process.exitCode = 1;
   }
 };
 
@@ -305,12 +380,16 @@ app.use((err, req, res, next) => {
       });
     }
 
-    return res.status(400).json({ message: err.message });
+    return res.status(400).json({ message: 'Invalid upload request.' });
   }
 
-  logger.error('HTTP', `Error on ${req.method} ${req.originalUrl}`, err.message);
+  logger.error('HTTP', 'Unhandled request error', {
+    requestId: res.getHeader('X-Request-Id'),
+    method: req.method,
+    path: req.route?.path ? `${req.baseUrl}${req.route.path}` : 'unmatched',
+    error: err
+  });
   res.status(err.status || 500).json({
-    message: 'Internal server error',
-    error: err.message
+    message: 'Internal server error.'
   });
 });

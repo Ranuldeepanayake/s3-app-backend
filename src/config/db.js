@@ -36,7 +36,7 @@ const isMongoHealthy = async () => {
     await mongoose.connection.db.admin().ping();
     return true;
   } catch (error) {
-    logger.warn('MONGO', 'MongoDB healthcheck failed', error.message);
+    logger.warn('MONGO', 'MongoDB healthcheck failed', error);
     return false;
   }
 };
@@ -57,7 +57,7 @@ const connectDB = async () => {
     });
     logger.info('MONGO', 'MongoDB connected');
   } catch (error) {
-    logger.error('MONGO', 'MongoDB connection error', error.message);
+    logger.error('MONGO', 'MongoDB connection error', error);
     logger.info('MONGO', 'Retrying MongoDB connection in 5 seconds...');
     scheduleReconnect();
   }
@@ -76,7 +76,7 @@ mongoose.connection.on('disconnected', () => {
 
 // Handle MongoDB runtime errors.
 mongoose.connection.on('error', (error) => {
-  logger.error('MONGO', 'MongoDB runtime error', error.message);
+  logger.error('MONGO', 'MongoDB runtime error', error);
 });
 
 module.exports = connectDB;

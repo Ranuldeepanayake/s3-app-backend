@@ -2,6 +2,9 @@
   "name": "s3-app-backend",
   "version": "1.28.0",
   "description": "Express CRUD API for uploading images to AWS S3 with MongoDB metadata",
+  "engines": {
+    "node": ">=22"
+  },
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
