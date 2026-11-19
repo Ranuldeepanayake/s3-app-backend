@@ -185,7 +185,7 @@ const start = (configuration) => {
   runQueries().catch((error) => {
     state.lastError = error.message;
     state.inFlight = false;
-    logger.error('POSTGRES-TRAFFIC', 'Traffic run failed unexpectedly', error.message);
+    logger.error('POSTGRES-TRAFFIC', 'Traffic run failed unexpectedly', error);
   });
 
   logger.info('POSTGRES-TRAFFIC', 'PostgreSQL test traffic started', {

@@ -46,6 +46,10 @@ describe('db config', () => {
 
     const result = await isMongoHealthy();
     expect(result).toBe(false);
-    expect(logger.warn).toHaveBeenCalledWith('MONGO', 'MongoDB healthcheck failed', 'No ping');
+    expect(logger.warn).toHaveBeenCalledWith(
+      'MONGO',
+      'MongoDB healthcheck failed',
+      expect.objectContaining({ message: 'No ping' })
+    );
   });
 });

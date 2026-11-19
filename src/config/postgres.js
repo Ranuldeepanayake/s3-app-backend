@@ -41,7 +41,7 @@ const getPool = () => {
   }
 
   if (pool) {
-    pool.end().catch((error) => logger.warn('POSTGRES', 'Error closing replaced pool', error.message));
+    pool.end().catch((error) => logger.warn('POSTGRES', 'Error closing replaced pool', error));
   }
 
   let ca;

@@ -1,4 +1,4 @@
-//Includes.
+// Archived upload server retained for reference; the supported API is src/server.js.
 const express = require('express');
 const bodyParser = require("body-parser");
 const path= require('path');
@@ -21,9 +21,9 @@ var session = require('express-session');
 const cookieParser = require("cookie-parser");
 const { Session } = require('express-session');
 const { serialize } = require('v8');
-const { error } = require('console');
 const { resolve } = require('path');
 const { render } = require('ejs');
+const logger = require('../src/config/logger');
 
 //Global constants.
 const app = express();
@@ -56,17 +56,20 @@ app.get('/', function(req, res){
 	//Check if user is logged in
 	//Show all supplier data if user is not logged in.
 	
-	console.log("Rendering the form page>");
+	logger.info('LEGACY', 'Rendering the form page');
 	res.render(htmlPath + 'index.ejs');
 
 });
 
 //This function processes adding an item.
-app.post('/upload-image', uploadImageMulter.single('imageField'), function(req, res) {
-	console.log("Form received!");
+app.post('/upload-image', uploadImageMulter.single('imageField'), async function(req, res) {
+	logger.info('LEGACY', 'Image upload request received', {
+		fileReceived: Boolean(req.file),
+		fileSizeBytes: req.file?.size,
+		mimeType: req.file?.mimetype
+	});
 	// req.file is the name of your file in the form above, here 'uploaded_file'
 	// req.body will hold the text fields, if there were any 
-	console.log(req.file, req.body);
 
 	//Handle other file types and limit the maximum file size.
 	file.renameSync(imagePath + req.file.filename, imagePath + req.file.originalname);
@@ -80,11 +83,11 @@ app.post('/upload-image', uploadImageMulter.single('imageField'), function(req, 
 	};
 
 	try {
-		s3Client.send(new PutObjectCommand(params));
-		console.log('File uploaded successfully');
+		await s3Client.send(new PutObjectCommand(params));
+		logger.info('LEGACY', 'File uploaded successfully');
 		res.status(200).send('File uploaded');
 	} catch (err) {
-		console.error(err);
+		logger.error('LEGACY', 'File upload failed', err);
 		res.status(500).send('Failed to upload file');
 	}
 
@@ -105,5 +108,5 @@ app.all('*', function(req, res) {
 
 //Starts a nodejs server instance.
 app.listen(port, () => {
-  console.log(`Example app listening at http://localhost:${port}`);
+  logger.info('LEGACY', 'Reference server listening', { host: 'localhost', port });
 });
